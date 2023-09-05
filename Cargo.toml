@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+glm = "0.2.3"
 libloading = "0.7"
 anyhow = "1"
 lazy_static = "1"
