@@ -24,10 +24,14 @@ pub(crate) unsafe fn create_render_pass(instance: &Instance, device: &Device, da
 
     // Subpasses
 
-    let color_attachment_ref = vk::AttachmentReference::builder().attachment(0).layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
+    let color_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(0)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
     let color_attachments = &[color_attachment_ref];
-    let subpass = vk::SubpassDescription::builder().pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS).color_attachments(color_attachments);
+    let subpass = vk::SubpassDescription::builder()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(color_attachments);
 
     // Dependencies
 
@@ -44,7 +48,10 @@ pub(crate) unsafe fn create_render_pass(instance: &Instance, device: &Device, da
     let attachments = &[color_attachment];
     let subpasses = &[subpass];
     let dependencies = &[dependency];
-    let info = vk::RenderPassCreateInfo::builder().attachments(attachments).subpasses(subpasses).dependencies(dependencies);
+    let info = vk::RenderPassCreateInfo::builder()
+        .attachments(attachments)
+        .subpasses(subpasses)
+        .dependencies(dependencies);
 
     data.render_pass = device.create_render_pass(&info, None)?;
 
@@ -60,29 +67,49 @@ pub(crate) unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Res
     let vert_shader_module = create_shader_module(device, &vert[..])?;
     let frag_shader_module = create_shader_module(device, &frag[..])?;
 
-    let vert_stage = vk::PipelineShaderStageCreateInfo::builder().stage(vk::ShaderStageFlags::VERTEX).module(vert_shader_module).name(b"main\0");
+    let vert_stage = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::VERTEX)
+        .module(vert_shader_module)
+        .name(b"main\0");
 
-    let frag_stage = vk::PipelineShaderStageCreateInfo::builder().stage(vk::ShaderStageFlags::FRAGMENT).module(frag_shader_module).name(b"main\0");
+    let frag_stage = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::FRAGMENT)
+        .module(frag_shader_module)
+        .name(b"main\0");
 
     // Vertex Input State
 
     let binding_descriptions = &[Vertex::binding_description()];
     let attribute_descriptions = Vertex::attribute_descriptions();
-    let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder().vertex_binding_descriptions(binding_descriptions).vertex_attribute_descriptions(&attribute_descriptions);
+    let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(binding_descriptions)
+        .vertex_attribute_descriptions(&attribute_descriptions);
 
     // Input Assembly State
 
-    let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder().topology(vk::PrimitiveTopology::TRIANGLE_LIST).primitive_restart_enable(false);
+    let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .primitive_restart_enable(false);
 
     // Viewport State
 
-    let viewport = vk::Viewport::builder().x(0.0).y(0.0).width(data.swapchain_extent.width as f32).height(data.swapchain_extent.height as f32).min_depth(0.0).max_depth(1.0);
+    let viewport = vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(data.swapchain_extent.width as f32)
+        .height(data.swapchain_extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0);
 
-    let scissor = vk::Rect2D::builder().offset(vk::Offset2D { x: 0, y: 0 }).extent(data.swapchain_extent);
+    let scissor = vk::Rect2D::builder()
+        .offset(vk::Offset2D { x: 0, y: 0 })
+        .extent(data.swapchain_extent);
 
     let viewports = &[viewport];
     let scissors = &[scissor];
-    let viewport_state = vk::PipelineViewportStateCreateInfo::builder().viewports(viewports).scissors(scissors);
+    let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
+        .viewports(viewports)
+        .scissors(scissors);
 
     // Rasterization State
 
@@ -92,21 +119,30 @@ pub(crate) unsafe fn create_pipeline(device: &Device, data: &mut AppData) -> Res
         .polygon_mode(vk::PolygonMode::FILL)
         .line_width(1.0)
         .cull_mode(vk::CullModeFlags::BACK)
-        .front_face(vk::FrontFace::CLOCKWISE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
         .depth_bias_enable(false);
 
     // Multisample State
 
-    let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder().sample_shading_enable(false).rasterization_samples(vk::SampleCountFlags::_1);
+    let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
+        .sample_shading_enable(false)
+        .rasterization_samples(vk::SampleCountFlags::_1);
 
     // Color Blend State
 
-    let attachment = vk::PipelineColorBlendAttachmentState::builder().color_write_mask(vk::ColorComponentFlags::all()).blend_enable(false);
+    let attachment = vk::PipelineColorBlendAttachmentState::builder()
+        .color_write_mask(vk::ColorComponentFlags::all())
+        .blend_enable(false);
 
     let attachments = &[attachment];
-    let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder().logic_op_enable(false).logic_op(vk::LogicOp::COPY).attachments(attachments).blend_constants([0.0, 0.0, 0.0, 0.0]);
+    let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .logic_op(vk::LogicOp::COPY)
+        .attachments(attachments)
+        .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
     // Layout
+
     let set_layouts = &[data.descriptor_set_layout];
     let layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(set_layouts);
 
@@ -162,12 +198,26 @@ impl Vertex {
     }
 
     pub fn binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder().binding(0).stride(size_of::<Vertex>() as u32).input_rate(vk::VertexInputRate::VERTEX).build()
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
     }
 
     pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
-        let pos = vk::VertexInputAttributeDescription::builder().binding(0).location(0).format(vk::Format::R32G32_SFLOAT).offset(0).build();
-        let color = vk::VertexInputAttributeDescription::builder().binding(0).location(1).format(vk::Format::R32G32B32_SFLOAT).offset(size_of::<glm::Vec2>() as u32).build();
+        let pos = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+        let color = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(size_of::<glm::Vec2>() as u32)
+            .build();
         [pos, color]
     }
 }

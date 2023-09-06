@@ -7,6 +7,8 @@ use vulkanalia::{
     Device, Instance,
 };
 
+use nalgebra_glm as glm;
+
 pub(crate) unsafe fn create_vertex_buffer(instance: &Instance, device: &Device, data: &mut AppData) -> Result<()> {
     let size = (size_of::<Vertex>() * VERTICES.len()) as u64;
 
@@ -124,7 +126,13 @@ pub(crate) unsafe fn create_uniform_buffers(instance: &Instance, device: &Device
     Ok(())
 }
 
-unsafe fn copy_buffer(device: &Device, data: &AppData, source: vk::Buffer, destination: vk::Buffer, size: vk::DeviceSize) -> Result<()> {
+unsafe fn copy_buffer(
+    device: &Device,
+    data: &AppData,
+    source: vk::Buffer,
+    destination: vk::Buffer,
+    size: vk::DeviceSize,
+) -> Result<()> {
     let info = vk::CommandBufferAllocateInfo::builder()
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_pool(data.command_pool)
@@ -160,7 +168,10 @@ unsafe fn create_buffer(
     usage: vk::BufferUsageFlags,
     properties: vk::MemoryPropertyFlags,
 ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
-    let buffer_info = vk::BufferCreateInfo::builder().size(size).usage(usage).sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let buffer_info = vk::BufferCreateInfo::builder()
+        .size(size)
+        .usage(usage)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
     let buffer = device.create_buffer(&buffer_info, None)?;
 
@@ -179,8 +190,8 @@ unsafe fn create_buffer(
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-struct UniformBufferObject {
-    model: glm::Mat4,
-    view: glm::Mat4,
-    proj: glm::Mat4,
+pub(crate) struct UniformBufferObject {
+    pub model: glm::Mat4,
+    pub view: glm::Mat4,
+    pub proj: glm::Mat4,
 }
