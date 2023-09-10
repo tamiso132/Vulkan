@@ -10,3 +10,10 @@ pub mod validation {
     pub const LAYER_NAME: &'static str = "VK_LAYER_KHRONOS_validation";
     pub const LAYER_NAME_BYTES: &[u8; 28] = b"VK_LAYER_KHRONOS_validation\0";
 }
+
+pub mod support {
+    use std::ffi::CStr;
+
+    pub const EXTENSION_SUPPORT_ARRAY_BYTES: &[&[u8]] = &[ash::extensions::khr::Swapchain::name().to_bytes()];
+    pub const EXTENSION_SUPPORT_ARRAY_NAME: &[&'static CStr] = &[ash::extensions::khr::Swapchain::name()];
+}

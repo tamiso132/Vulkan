@@ -2,10 +2,7 @@
 use anyhow::{Error, Ok, Result};
 use ash::{
     extensions,
-    vk::{
-        self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT,
-        DebugUtilsMessengerCreateInfoEXT,
-    },
+    vk::{self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateInfoEXT},
     Entry, Instance,
 };
 use std::ptr;
@@ -21,8 +18,8 @@ use winit::{
 
 use vulky::{
     constant::{validation, version},
-    device::{create_logical_device, pick_phyiscal_device},
-    platform,
+    device::{create_logical_device, pick_physical_device},
+    platform, utility,
 };
 
 /// The Vulkan SDK version that started requiring the portability subset extension for macOS.
@@ -31,10 +28,7 @@ fn main() -> Result<()> {
     // Create an event loop and window using winit
     unsafe {
         let event_loop = EventLoop::new();
-        let window = WindowBuilder::new()
-            .with_title("Vulkan Window")
-            .build(&event_loop)
-            .unwrap();
+        let window = WindowBuilder::new().with_title("Vulkan Window").build(&event_loop).unwrap();
 
         let mut app = VulkanApp::new(&window)?;
 
@@ -80,31 +74,42 @@ fn main() -> Result<()> {
 struct VulkanApp {
     instance: ash::Instance,
     entry: ash::Entry,
+
+    //debug
     debug_util_loader: ash::extensions::ext::DebugUtils,
     debug_messenger: vk::DebugUtilsMessengerEXT,
+
+    //devices
     physical_device: vk::PhysicalDevice,
     device: ash::Device,
-    graphics_queue: vk::Queue,
 
     //Surface
     surface_loader: ash::extensions::khr::Surface,
     surface: vk::SurfaceKHR,
+
+    // Queues
+    graphics_queue: vk::Queue,
+    present_queue: vk::Queue,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
         let entry = ash::Entry::load()?;
         let instance = create_instance(&entry)?;
         let (debug_util_loader, debug_messenger) = setup_debug_utils(&entry, &instance)?;
-        let (physical_device, graphic_family) = pick_phyiscal_device(&entry, &instance)?;
-        let device = create_logical_device(physical_device, &instance, graphic_family)?;
-        let graphics_queue = device.get_device_queue(graphic_family, 0);
+
         let (surface, surface_loader) = create_surface(&entry, &instance, window)?;
+
+        let (physical_device, queue_families) = pick_physical_device(&instance, &surface_loader, &surface)?;
+        let device = create_logical_device(&physical_device, &instance, &queue_families)?;
+        let graphics_queue = device.get_device_queue(queue_families.graphics_family.unwrap(), 0);
+        let present_queue = device.get_device_queue(queue_families.present_family.unwrap(), 0);
         Ok(Self {
             instance,
             entry,
             physical_device,
             device,
             graphics_queue,
+            present_queue,
             surface,
             surface_loader,
             debug_util_loader,
@@ -118,6 +123,7 @@ impl VulkanApp {
             self.debug_util_loader
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
+        self.surface_loader.destroy_surface(self.surface, None);
         self.device.destroy_device(None);
         self.instance.destroy_instance(None);
     }
@@ -141,13 +147,8 @@ unsafe fn create_instance(entry: &ash::Entry) -> Result<ash::Instance> {
 
     let mut extension = vulky::platform::required_extension_names();
 
-    let layer_names = [CStr::from_bytes_with_nul_unchecked(
-        validation::LAYER_NAME_BYTES,
-    )];
-    let layers_names_raw: Vec<*const c_char> = layer_names
-        .iter()
-        .map(|raw_name| raw_name.as_ptr())
-        .collect();
+    let layer_names = [CStr::from_bytes_with_nul_unchecked(validation::LAYER_NAME_BYTES)];
+    let layers_names_raw: Vec<*const c_char> = layer_names.iter().map(|raw_name| raw_name.as_ptr()).collect();
 
     //macos portability
     let flags = if cfg!(target_os = "macos") && PORTABILITY_MACOS_VERSION >= version::API_VERSION {
@@ -171,9 +172,7 @@ unsafe fn create_instance(entry: &ash::Entry) -> Result<ash::Instance> {
 
     if validation::ENABLED {
         let debug_utils_create_info = debug_create_info()?;
-        instance_info.p_next = &debug_utils_create_info
-            as *const vk::DebugUtilsMessengerCreateInfoEXT
-            as *const c_void;
+        instance_info.p_next = &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void;
 
         instance_info.pp_enabled_layer_names = layers_names_raw.as_ptr();
         instance_info.enabled_layer_count = layers_names_raw.len() as u32;
@@ -199,8 +198,7 @@ unsafe fn check_validation_support(entry: &Entry) -> Result<bool> {
     let mut is_layer_found = false;
 
     for layer_property in layer_properties.iter() {
-        let raw_string = layer_property.layer_name.as_ptr();
-        let s = CStr::from_ptr(raw_string).to_str()?.to_owned();
+        let s = utility::vk_to_string(&layer_property.layer_name);
 
         if s == validation::LAYER_NAME {
             is_layer_found = true;

@@ -1,11 +1,17 @@
-use anyhow::{Error, Result};
-use ash::vk;
+use std::ffi::CStr;
 
-use crate::{constant::validation, utility};
+use anyhow::Error;
+use anyhow::Result;
+use ash::{vk, Instance};
+
+use crate::{constant::support, utility, QueueFamilyIndices};
+
 unsafe fn is_device_suitable(
     physical_device: vk::PhysicalDevice,
     instance: &ash::Instance,
-) -> Option<u32> {
+    surface_loader: &ash::extensions::khr::Surface,
+    surface: &vk::SurfaceKHR,
+) -> Result<QueueFamilyIndices> {
     let mut device_properties = vk::PhysicalDeviceProperties2::default();
     let mut device_features = vk::PhysicalDeviceFeatures2::default();
 
@@ -38,7 +44,9 @@ unsafe fn is_device_suitable(
 
     println!("\tVersion:, {}.{}.{}.{}", variant, major, minior, patch); // supported vulkan
 
-    return QueueFamilyIndices::find_queue_family(physical_device, instance);
+    let is_extension_support = device_extension_support(instance, physical_device);
+
+    return QueueFamilyIndices::find_queue_family(physical_device, instance, surface_loader, surface);
 
     //println!("{:?}", device_properties.properties.device_type);
     // if device_properties.properties.device_type == ash::vk::PhysicalDeviceType::DISCRETE_GPU {}
@@ -46,78 +54,75 @@ unsafe fn is_device_suitable(
     // None
 }
 
-pub unsafe fn pick_phyiscal_device(
-    entity: &ash::Entry,
+unsafe fn device_extension_support(instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<bool> {
+    let extensions = instance.enumerate_device_extension_properties(physical_device)?;
+
+    let mut vec_names: Vec<&'static CStr> = support::EXTENSION_SUPPORT_ARRAY_NAME.to_vec();
+    for extension in extensions {
+        let s = utility::vk_to_string(&extension.extension_name);
+        for (index, extension_required) in vec_names.clone().iter().enumerate() {
+            if s == extension_required.to_str()? {
+                vec_names.remove(index);
+                break;
+            }
+        }
+    }
+    if vec_names.len() > 0 {
+        return Err(Error::msg("missing extension support on this device"));
+    }
+
+    Ok(true)
+}
+
+pub unsafe fn pick_physical_device(
     instance: &ash::Instance,
-) -> Result<(vk::PhysicalDevice, u32)> {
+    surface_loader: &ash::extensions::khr::Surface,
+    surface: &vk::SurfaceKHR,
+) -> Result<(vk::PhysicalDevice, QueueFamilyIndices)> {
     let devices = instance.enumerate_physical_devices()?;
     for device in devices {
-        let dev_ret = is_device_suitable(device, instance);
+        let dev_ret = is_device_suitable(device, instance, surface_loader, surface);
 
         match dev_ret {
-            Some(graphic_index) => return Ok((device, graphic_index)),
-            None => continue,
+            Ok(x) => return Ok((device, x)),
+            Err(e) => eprintln!("Error: {}", e),
         }
     }
     Err(Error::msg("No Vulkan Supported GPU"))
 }
 
 pub unsafe fn create_logical_device(
-    physical_device: vk::PhysicalDevice,
+    physical_device: &vk::PhysicalDevice,
     instance: &ash::Instance,
-    graphic_index: u32,
+    queue_indices: &QueueFamilyIndices,
 ) -> Result<ash::Device> {
     let queue_priorities = [1.0];
 
     // Create the queue info with the correct queue priorities
-    let queue_info = vk::DeviceQueueCreateInfo {
-        s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
-        p_next: std::ptr::null(),
-        flags: vk::DeviceQueueCreateFlags::empty(),
-        queue_family_index: graphic_index,
-        queue_count: 1,
-        p_queue_priorities: queue_priorities.as_ptr(),
-    };
+    let mut queues_infos = vec![];
+    for _ in [queue_indices.graphics_family, queue_indices.present_family] {
+        let queue_info = vk::DeviceQueueCreateInfo {
+            s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
+            p_next: std::ptr::null(),
+            flags: vk::DeviceQueueCreateFlags::empty(),
+            queue_family_index: queue_indices.graphics_family.unwrap(),
+            queue_count: 1,
+            p_queue_priorities: queue_priorities.as_ptr(),
+        };
+        queues_infos.push(queue_info);
+    }
 
     let feature_info = vk::PhysicalDeviceFeatures::default();
 
     let mut device_info = vk::DeviceCreateInfo::default();
     device_info.s_type = vk::StructureType::DEVICE_CREATE_INFO;
-    device_info.p_queue_create_infos = &queue_info;
-    device_info.queue_create_info_count = 1;
+    device_info.p_queue_create_infos = queues_infos.as_ptr();
+    device_info.queue_create_info_count = queues_infos.len() as u32;
     device_info.p_enabled_features = &feature_info;
     device_info.enabled_extension_count = 0;
 
-    let device = instance.create_device(physical_device, &device_info, None)?;
+    let device = instance.create_device(*physical_device, &device_info, None)?;
     Ok(device)
-}
-
-struct QueueFamilyIndices {}
-impl QueueFamilyIndices {
-    // GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING
-    // TRANSFER | SPARSE_BINDING
-    // COMPUTE | TRANSFER | SPARSE_BINDING
-    // TRANSFER | SPARSE_BINDING | VIDEO_DECODE_KHR
-
-    unsafe fn find_queue_family(
-        device: vk::PhysicalDevice,
-        instance: &ash::Instance,
-    ) -> Option<u32> {
-        let queue_count = instance.get_physical_device_queue_family_properties2_len(device);
-
-        let mut queue_families = vec![ash::vk::QueueFamilyProperties2::default(); queue_count];
-
-        instance.get_physical_device_queue_family_properties2(device, &mut queue_families);
-
-        for (index, queue) in queue_families.iter().enumerate() {
-            if queue.queue_family_properties.queue_flags & vk::QueueFlags::GRAPHICS
-                != vk::QueueFlags::empty()
-            {
-                return Some(index as u32);
-            }
-        }
-        return None;
-    }
 }
 
 pub fn get_version_api(api: u32) -> (u32, u32, u32, u32) {
