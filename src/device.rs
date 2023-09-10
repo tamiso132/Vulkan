@@ -1,97 +1,130 @@
-use std::collections::HashSet;
+use anyhow::{Error, Result};
+use ash::vk;
 
-//================================================
-// Logical Device
-//================================================
-use anyhow::{anyhow, Result};
-use log::{info, warn};
-use thiserror::Error;
-use vulkanalia::{
-    vk::{self, DeviceV1_0, HasBuilder, InstanceV1_0},
-    Device, Entry, Instance,
-};
+use crate::{constant::validation, utility};
+unsafe fn is_device_suitable(
+    physical_device: vk::PhysicalDevice,
+    instance: &ash::Instance,
+) -> Option<u32> {
+    let mut device_properties = vk::PhysicalDeviceProperties2::default();
+    let mut device_features = vk::PhysicalDeviceFeatures2::default();
 
-use crate::{structs::QueueFamilyIndices, swapchain::SwapchainSupport, AppData, DEVICE_EXTENSIONS, PORTABILITY_MACOS_VERSION, VALIDATION_ENABLED, VALIDATION_LAYER};
+    instance.get_physical_device_properties2(physical_device, &mut device_properties);
+    instance.get_physical_device_features2(physical_device, &mut device_features);
 
-#[derive(Debug, Error)]
-#[error("{0}")]
-pub struct SuitabilityError(pub &'static str);
+    let device_type = match device_properties.properties.device_type {
+        vk::PhysicalDeviceType::CPU => "Cpu",
+        vk::PhysicalDeviceType::INTEGRATED_GPU => "Integrated GPU",
+        vk::PhysicalDeviceType::DISCRETE_GPU => "Discrete GPU",
+        vk::PhysicalDeviceType::VIRTUAL_GPU => "Virtual GPU",
+        vk::PhysicalDeviceType::OTHER => "Unknown",
+        _ => panic!(),
+    };
 
-pub(crate) unsafe fn pick_physical_device(instance: &Instance, data: &mut AppData) -> Result<()> {
-    for physical_device in instance.enumerate_physical_devices()? {
-        let properties = instance.get_physical_device_properties(physical_device);
+    let device_name = utility::vk_to_string(&device_properties.properties.device_name);
+    let driver_version = get_version_api(device_properties.properties.driver_version);
 
-        if let Err(error) = check_physical_device(instance, data, physical_device) {
-            warn!("Skipping physical device (`{}`): {}", properties.device_name, error);
-        } else {
-            info!("Selected physical device (`{}`).", properties.device_name);
-            data.physical_device = physical_device;
-            return Ok(());
+    println!(
+        "\tDevice Name: {}, id: {}, type: {}, driver version: {}.{}.{}.",
+        device_name,
+        device_properties.properties.device_id,
+        device_type,
+        driver_version.1,
+        driver_version.2,
+        driver_version.3,
+    );
+
+    let (variant, major, minior, patch) = get_version_api(device_properties.properties.api_version);
+
+    println!("\tVersion:, {}.{}.{}.{}", variant, major, minior, patch); // supported vulkan
+
+    return QueueFamilyIndices::find_queue_family(physical_device, instance);
+
+    //println!("{:?}", device_properties.properties.device_type);
+    // if device_properties.properties.device_type == ash::vk::PhysicalDeviceType::DISCRETE_GPU {}
+    // // TODO, minimum requirements
+    // None
+}
+
+pub unsafe fn pick_phyiscal_device(
+    entity: &ash::Entry,
+    instance: &ash::Instance,
+) -> Result<(vk::PhysicalDevice, u32)> {
+    let devices = instance.enumerate_physical_devices()?;
+    for device in devices {
+        let dev_ret = is_device_suitable(device, instance);
+
+        match dev_ret {
+            Some(graphic_index) => return Ok((device, graphic_index)),
+            None => continue,
         }
     }
-
-    Err(anyhow!("Failed to find suitable physical device."))
+    Err(Error::msg("No Vulkan Supported GPU"))
 }
 
-pub(crate) unsafe fn check_physical_device(instance: &Instance, data: &AppData, physical_device: vk::PhysicalDevice) -> Result<()> {
-    QueueFamilyIndices::get(instance, data, physical_device)?;
-    check_physical_device_extensions(instance, physical_device)?;
+pub unsafe fn create_logical_device(
+    physical_device: vk::PhysicalDevice,
+    instance: &ash::Instance,
+    graphic_index: u32,
+) -> Result<ash::Device> {
+    let queue_priorities = [1.0];
 
-    let support = SwapchainSupport::get(instance, data, physical_device)?;
-    if support.formats.is_empty() || support.present_modes.is_empty() {
-        return Err(anyhow!(SuitabilityError("Insufficient swapchain support.")));
-    }
+    // Create the queue info with the correct queue priorities
+    let queue_info = vk::DeviceQueueCreateInfo {
+        s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
+        p_next: std::ptr::null(),
+        flags: vk::DeviceQueueCreateFlags::empty(),
+        queue_family_index: graphic_index,
+        queue_count: 1,
+        p_queue_priorities: queue_priorities.as_ptr(),
+    };
 
-    Ok(())
-}
+    let feature_info = vk::PhysicalDeviceFeatures::default();
 
-pub(crate) unsafe fn check_physical_device_extensions(instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<()> {
-    let extensions = instance.enumerate_device_extension_properties(physical_device, None)?.iter().map(|e| e.extension_name).collect::<HashSet<_>>();
-    if DEVICE_EXTENSIONS.iter().all(|e| extensions.contains(e)) {
-        Ok(())
-    } else {
-        Err(anyhow!(SuitabilityError("Missing required device extensions.")))
-    }
-}
-pub(crate) unsafe fn create_logical_device(entry: &Entry, instance: &Instance, data: &mut AppData) -> Result<Device> {
-    // Queue Create Infos
+    let mut device_info = vk::DeviceCreateInfo::default();
+    device_info.s_type = vk::StructureType::DEVICE_CREATE_INFO;
+    device_info.p_queue_create_infos = &queue_info;
+    device_info.queue_create_info_count = 1;
+    device_info.p_enabled_features = &feature_info;
+    device_info.enabled_extension_count = 0;
 
-    let indices = QueueFamilyIndices::get(instance, data, data.physical_device)?;
-
-    let mut unique_indices = HashSet::new();
-    unique_indices.insert(indices.graphics);
-    unique_indices.insert(indices.present);
-
-    let queue_priorities = &[1.0];
-    let queue_infos = unique_indices.iter().map(|i| vk::DeviceQueueCreateInfo::builder().queue_family_index(*i).queue_priorities(queue_priorities)).collect::<Vec<_>>();
-
-    // Layers
-
-    let layers = if VALIDATION_ENABLED { vec![VALIDATION_LAYER.as_ptr()] } else { vec![] };
-
-    // Extensions
-
-    let mut extensions = DEVICE_EXTENSIONS.iter().map(|n| n.as_ptr()).collect::<Vec<_>>();
-
-    // Required by Vulkan SDK on macOS since 1.3.216.
-    if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-        extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
-    }
-
-    // Features
-
-    let features = vk::PhysicalDeviceFeatures::builder();
-
-    // Create
-
-    let info = vk::DeviceCreateInfo::builder().queue_create_infos(&queue_infos).enabled_layer_names(&layers).enabled_extension_names(&extensions).enabled_features(&features);
-
-    let device = instance.create_device(data.physical_device, &info, None)?;
-
-    // Queues
-
-    data.graphics_queue = device.get_device_queue(indices.graphics, 0);
-    data.present_queue = device.get_device_queue(indices.present, 0);
-
+    let device = instance.create_device(physical_device, &device_info, None)?;
     Ok(device)
+}
+
+struct QueueFamilyIndices {}
+impl QueueFamilyIndices {
+    // GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING
+    // TRANSFER | SPARSE_BINDING
+    // COMPUTE | TRANSFER | SPARSE_BINDING
+    // TRANSFER | SPARSE_BINDING | VIDEO_DECODE_KHR
+
+    unsafe fn find_queue_family(
+        device: vk::PhysicalDevice,
+        instance: &ash::Instance,
+    ) -> Option<u32> {
+        let queue_count = instance.get_physical_device_queue_family_properties2_len(device);
+
+        let mut queue_families = vec![ash::vk::QueueFamilyProperties2::default(); queue_count];
+
+        instance.get_physical_device_queue_family_properties2(device, &mut queue_families);
+
+        for (index, queue) in queue_families.iter().enumerate() {
+            if queue.queue_family_properties.queue_flags & vk::QueueFlags::GRAPHICS
+                != vk::QueueFlags::empty()
+            {
+                return Some(index as u32);
+            }
+        }
+        return None;
+    }
+}
+
+pub fn get_version_api(api: u32) -> (u32, u32, u32, u32) {
+    let variant = api >> 29;
+    let major = api >> 22;
+    let minor = (api >> 12) & (0x3FF as u32);
+    let patch = api & (0xFF as u32);
+
+    (variant, major, minor, patch)
 }
