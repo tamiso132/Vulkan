@@ -1,5 +1,5 @@
 # Vulkan för utvecklingsprojektet
 
 Material
-https://doc.rust-lang.org/book/ // rust tutorials
-https://kylemayes.github.io/vulkanalia/ vulkan in rust tutorial
+https://doc.rust-lang.org/book  (rust tutorial)
+https://vulkan-tutorial.com/Introduction (vulkan in rust tutorial)

@@ -122,6 +122,37 @@ impl SwapChainSupportDetails {
             ),
         }
     }
+
+    pub unsafe fn create_image_views(
+        swapchain_images: &Vec<vk::Image>,
+        swapchain_format: vk::Format,
+        device: &ash::Device,
+    ) -> Result<Vec<vk::ImageView>> {
+        let mut image_views = vec![];
+        for image in swapchain_images {
+            let mut image_view_info = vk::ImageViewCreateInfo::default();
+            image_view_info.s_type = vk::StructureType::IMAGE_VIEW_CREATE_INFO;
+            image_view_info.image = image.clone();
+            image_view_info.view_type = vk::ImageViewType::TYPE_2D;
+            image_view_info.format = swapchain_format;
+
+            image_view_info.components.r = vk::ComponentSwizzle::IDENTITY;
+            image_view_info.components.g = vk::ComponentSwizzle::IDENTITY;
+            image_view_info.components.b = vk::ComponentSwizzle::IDENTITY;
+            image_view_info.components.a = vk::ComponentSwizzle::IDENTITY;
+
+            image_view_info.subresource_range.aspect_mask = vk::ImageAspectFlags::COLOR;
+            image_view_info.subresource_range.base_mip_level = 0;
+            image_view_info.subresource_range.level_count = 1;
+            image_view_info.subresource_range.base_array_layer = 0;
+            image_view_info.subresource_range.layer_count = 1;
+
+            let image_view = device.create_image_view(&image_view_info, None)?;
+            image_views.push(image_view);
+        }
+        Ok(image_views)
+    }
+
     pub unsafe fn create_swapchain(
         instance: &ash::Instance,
         device: &ash::Device,
@@ -133,7 +164,9 @@ impl SwapChainSupportDetails {
         ash::extensions::khr::Swapchain,
         vk::SwapchainKHR,
         vk::Extent2D,
-        vk::SurfaceFormatKHR,
+        vk::Format,
+        Vec<vk::Image>,
+        Vec<vk::ImageView>,
     )> {
         let swap_chain_support = SwapChainSupportDetails::query_swapchain_support(surface_loader, surface, physical_device)?;
 
@@ -180,6 +213,17 @@ impl SwapChainSupportDetails {
         let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
         let swapchain = swapchain_loader.create_swapchain(&swapchain_info, None)?;
 
-        Ok((swapchain_loader, swapchain, extent, surface_format))
+        let swapchain_images = swapchain_loader.get_swapchain_images(swapchain)?;
+        let swapchain_image_views =
+            SwapChainSupportDetails::create_image_views(&swapchain_images, surface_format.format, device)?;
+
+        Ok((
+            swapchain_loader,
+            swapchain,
+            extent,
+            surface_format.format,
+            swapchain_images,
+            swapchain_image_views,
+        ))
     }
 }

@@ -94,9 +94,10 @@ struct VulkanApp {
     //Swapchain
     swapchain: vk::SwapchainKHR,
     swapchain_loader: ash::extensions::khr::Swapchain,
-    swapchain_format: vk::SurfaceFormatKHR,
+    swapchain_format: vk::Format,
     swapchain_extent: vk::Extent2D,
     swapchain_images: Vec<vk::Image>,
+    swapchain_image_views: Vec<vk::ImageView>,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
@@ -111,16 +112,15 @@ impl VulkanApp {
         let graphics_queue = device.get_device_queue(queue_families.graphics_family.unwrap(), 0);
         let present_queue = device.get_device_queue(queue_families.present_family.unwrap(), 0);
 
-        let (swapchain_loader, swapchain, swapchain_extent, swapchain_format) = SwapChainSupportDetails::create_swapchain(
-            &instance,
-            &device,
-            &surface_loader,
-            surface,
-            physical_device,
-            queue_families,
-        )?;
-
-        let swapchain_images = swapchain_loader.get_swapchain_images(swapchain)?;
+        let (swapchain_loader, swapchain, swapchain_extent, swapchain_format, swapchain_images, swapchain_image_views) =
+            SwapChainSupportDetails::create_swapchain(
+                &instance,
+                &device,
+                &surface_loader,
+                surface,
+                physical_device,
+                queue_families,
+            )?;
 
         Ok(Self {
             instance,
@@ -136,6 +136,7 @@ impl VulkanApp {
             swapchain_extent,
             swapchain_format,
             swapchain_images,
+            swapchain_image_views,
             debug_util_loader,
             debug_messenger,
         })
@@ -147,6 +148,12 @@ impl VulkanApp {
             self.debug_util_loader
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
+
+        for _ in 0..self.swapchain_image_views.len() {
+            let image_view = self.swapchain_image_views.pop().unwrap();
+            self.device.destroy_image_view(image_view, None);
+        }
+
         self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         self.surface_loader.destroy_surface(self.surface, None);
         self.device.destroy_device(None);

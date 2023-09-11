@@ -7,7 +7,6 @@ use anyhow::Result;
 use ash::{vk, Instance};
 
 use crate::constant;
-use crate::constant::validation;
 use crate::SwapChainSupportDetails;
 use crate::{constant::support, utility, QueueFamilyIndices};
 

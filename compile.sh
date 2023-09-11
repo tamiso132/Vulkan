@@ -1,2 +1,2 @@
-glslc shaders/shader.vert -o shaders/vert.spv
-glslc shaders/shader.frag -o shaders/frag.spv
+glslc shaders/shader.vert -o shaders/spv/vert.spv
+glslc shaders/shader.frag -o shaders/spv/frag.spv
