@@ -17,3 +17,8 @@ pub mod support {
     pub const EXTENSION_SUPPORT_ARRAY_BYTES: &[&[u8]] = &[ash::extensions::khr::Swapchain::name().to_bytes()];
     pub const EXTENSION_SUPPORT_ARRAY_NAME: &[&'static CStr] = &[ash::extensions::khr::Swapchain::name()];
 }
+
+pub mod Window_Info {
+    pub const HEIGHT: u32 = 900;
+    pub const WIDTH: u32 = 900;
+}

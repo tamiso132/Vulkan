@@ -55,3 +55,131 @@ impl QueueFamilyIndices {
         return Err(Error::msg("no compatible queue family found"));
     }
 }
+
+// Basic surface capabilities (min/max number of images in swap chain, min/max width and height of images)
+// Surface formats (pixel format, color space)
+// Available presentation modes
+
+pub struct SwapChainSupportDetails {
+    capabilities: vk::SurfaceCapabilitiesKHR,
+    formats: Vec<vk::SurfaceFormatKHR>,
+    present_modes: Vec<vk::PresentModeKHR>,
+}
+// VK_PRESENT_MODE_IMMEDIATE_KHR: Images submitted by your application are transferred to the screen right away, which may result in tearing.
+// VK_PRESENT_MODE_FIFO_KHR: The swap chain is a queue where the display takes an image from the front of the queue when the display is refreshed and the program inserts rendered images at the back of the queue. If the queue is full then the program has to wait. This is most similar to vertical sync as found in modern games. The moment that the display is refreshed is known as "vertical blank".
+// VK_PRESENT_MODE_FIFO_RELAXED_KHR: This mode only differs from the previous one if the application is late and the queue was empty at the last vertical blank. Instead of waiting for the next vertical blank, the image is transferred right away when it finally arrives. This may result in visible tearing.
+// VK_PRESENT_MODE_MAILBOX_KHR: This is another variation of the second mode. Instead of blocking the application when the queue is full, the images that are already queued are simply replaced with the newer ones. This mode can be used to render frames as fast as possible while still avoiding tearing, resulting in fewer latency issues than standard vertical sync. This is commonly known as "triple buffering", although the existence of three buffers alone does not necessarily mean that the framerate is unlocked.
+
+impl SwapChainSupportDetails {
+    unsafe fn query_swapchain_support(
+        surface_loader: &ash::extensions::khr::Surface,
+        surface: vk::SurfaceKHR,
+        physical_device: vk::PhysicalDevice,
+    ) -> Result<SwapChainSupportDetails> {
+        let capabilities = surface_loader.get_physical_device_surface_capabilities(physical_device, surface)?;
+        let formats = surface_loader.get_physical_device_surface_formats(physical_device, surface)?;
+        let present_modes = surface_loader.get_physical_device_surface_present_modes(physical_device, surface)?;
+
+        Ok(SwapChainSupportDetails {
+            capabilities,
+            formats,
+            present_modes,
+        })
+    }
+    unsafe fn choose_format(available_formats: Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
+        let mut index = 0;
+        for (i, format_available) in available_formats.iter().enumerate() {
+            if format_available.format == vk::Format::B8G8R8A8_SRGB {
+                index = i;
+                break;
+            }
+        }
+        return available_formats[index];
+    }
+
+    unsafe fn choose_present_mode(present_modes: Vec<vk::PresentModeKHR>) -> vk::PresentModeKHR {
+        let mut present_ret = vk::PresentModeKHR::FIFO;
+        for present_mode in present_modes {
+            if present_mode == vk::PresentModeKHR::MAILBOX {
+                present_ret = present_mode;
+                break;
+            }
+        }
+        return present_ret;
+    }
+
+    unsafe fn choose_extent(capabilities: vk::SurfaceCapabilitiesKHR) -> vk::Extent2D {
+        vk::Extent2D {
+            width: num::clamp(
+                constant::Window_Info::WIDTH,
+                capabilities.min_image_extent.width,
+                capabilities.max_image_extent.width,
+            ),
+            height: num::clamp(
+                constant::Window_Info::HEIGHT,
+                capabilities.min_image_extent.height,
+                capabilities.max_image_extent.height,
+            ),
+        }
+    }
+    pub unsafe fn create_swapchain(
+        instance: &ash::Instance,
+        device: &ash::Device,
+        surface_loader: &ash::extensions::khr::Surface,
+        surface: vk::SurfaceKHR,
+        physical_device: vk::PhysicalDevice,
+        indices: QueueFamilyIndices,
+    ) -> Result<(
+        ash::extensions::khr::Swapchain,
+        vk::SwapchainKHR,
+        vk::Extent2D,
+        vk::SurfaceFormatKHR,
+    )> {
+        let swap_chain_support = SwapChainSupportDetails::query_swapchain_support(surface_loader, surface, physical_device)?;
+
+        let extent = SwapChainSupportDetails::choose_extent(swap_chain_support.capabilities);
+        let surface_format = SwapChainSupportDetails::choose_format(swap_chain_support.formats);
+        let present_mode = SwapChainSupportDetails::choose_present_mode(swap_chain_support.present_modes);
+
+        let mut image_count = swap_chain_support.capabilities.min_image_count + 1;
+
+        if swap_chain_support.capabilities.max_image_count > 0
+            && image_count > swap_chain_support.capabilities.max_image_count
+        {
+            image_count = swap_chain_support.capabilities.max_image_count;
+        }
+        let mut swapchain_info = vk::SwapchainCreateInfoKHR::default();
+
+        swapchain_info.s_type = vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR;
+        swapchain_info.surface = surface;
+        swapchain_info.min_image_count = image_count;
+        swapchain_info.image_format = surface_format.format;
+        swapchain_info.image_color_space = surface_format.color_space;
+        swapchain_info.image_extent = extent;
+        swapchain_info.image_array_layers = 1;
+        swapchain_info.image_usage = vk::ImageUsageFlags::COLOR_ATTACHMENT;
+        swapchain_info.pre_transform = swap_chain_support.capabilities.current_transform;
+        swapchain_info.composite_alpha = vk::CompositeAlphaFlagsKHR::OPAQUE;
+        swapchain_info.present_mode = present_mode;
+        swapchain_info.clipped = vk::TRUE;
+        swapchain_info.old_swapchain = vk::SwapchainKHR::null();
+        // VK_SHARING_MODE_EXCLUSIVE: An image is owned by one queue family at a time and ownership must be explicitly transferred before using it in another queue family. This option offers the best performance.
+        // VK_SHARING_MODE_CONCURRENT: Images can be used across multiple queue families without explicit ownership transfers.
+
+        if indices.graphics_family.unwrap() != indices.present_family.unwrap() {
+            swapchain_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
+            swapchain_info.queue_family_index_count = 2;
+            swapchain_info.p_queue_family_indices =
+                [indices.graphics_family.unwrap(), indices.present_family.unwrap()].as_ptr();
+        } else {
+            swapchain_info.image_sharing_mode = vk::SharingMode::EXCLUSIVE;
+            swapchain_info.queue_family_index_count = 0;
+            swapchain_info.p_queue_family_indices = std::ptr::null();
+        }
+
+        let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
+        let swapchain = swapchain_loader.create_swapchain(&swapchain_info, None)?;
+
+        Ok((swapchain_loader, swapchain, extent, surface_format))
+    }
+}

@@ -1,5 +1,5 @@
 #![feature(try_blocks)]
-use anyhow::{Error, Ok, Result};
+use anyhow::{Error, Result};
 use ash::{
     extensions,
     vk::{self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateInfoEXT},
@@ -19,18 +19,21 @@ use winit::{
 use vulky::{
     constant::{validation, version},
     device::{create_logical_device, pick_physical_device},
-    platform, utility,
+    platform, utility, SwapChainSupportDetails,
 };
 
 /// The Vulkan SDK version that started requiring the portability subset extension for macOS.
 pub const PORTABILITY_MACOS_VERSION: u32 = vk::make_api_version(0, 1, 3, 216);
-fn main() -> Result<()> {
+fn main() {
     // Create an event loop and window using winit
     unsafe {
         let event_loop = EventLoop::new();
         let window = WindowBuilder::new().with_title("Vulkan Window").build(&event_loop).unwrap();
 
-        let mut app = VulkanApp::new(&window)?;
+        let mut app: VulkanApp = match VulkanApp::new(&window) {
+            Ok(el) => el,
+            Err(e) => panic!("{e}"),
+        };
 
         event_loop.run(move |event, _, control_flow| {
             // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
@@ -66,9 +69,6 @@ fn main() -> Result<()> {
             }
         });
     }
-
-    // Get the HINSTANCE and HWND handles from the window on Windows
-    Ok(())
 }
 
 struct VulkanApp {
@@ -90,6 +90,13 @@ struct VulkanApp {
     // Queues
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+
+    //Swapchain
+    swapchain: vk::SwapchainKHR,
+    swapchain_loader: ash::extensions::khr::Swapchain,
+    swapchain_format: vk::SurfaceFormatKHR,
+    swapchain_extent: vk::Extent2D,
+    swapchain_images: Vec<vk::Image>,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
@@ -103,6 +110,18 @@ impl VulkanApp {
         let device = create_logical_device(&physical_device, &instance, &queue_families)?;
         let graphics_queue = device.get_device_queue(queue_families.graphics_family.unwrap(), 0);
         let present_queue = device.get_device_queue(queue_families.present_family.unwrap(), 0);
+
+        let (swapchain_loader, swapchain, swapchain_extent, swapchain_format) = SwapChainSupportDetails::create_swapchain(
+            &instance,
+            &device,
+            &surface_loader,
+            surface,
+            physical_device,
+            queue_families,
+        )?;
+
+        let swapchain_images = swapchain_loader.get_swapchain_images(swapchain)?;
+
         Ok(Self {
             instance,
             entry,
@@ -112,6 +131,11 @@ impl VulkanApp {
             present_queue,
             surface,
             surface_loader,
+            swapchain,
+            swapchain_loader,
+            swapchain_extent,
+            swapchain_format,
+            swapchain_images,
             debug_util_loader,
             debug_messenger,
         })
@@ -123,6 +147,7 @@ impl VulkanApp {
             self.debug_util_loader
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
+        self.swapchain_loader.destroy_swapchain(self.swapchain, None);
         self.surface_loader.destroy_surface(self.surface, None);
         self.device.destroy_device(None);
         self.instance.destroy_instance(None);
