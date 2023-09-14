@@ -5,6 +5,7 @@ pub mod constant;
 pub mod device;
 pub mod platform;
 pub mod utility;
+pub mod pipeline;
 
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
