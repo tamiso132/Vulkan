@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 pub mod version {
     use ash::vk;
 
@@ -21,4 +23,11 @@ pub mod support {
 pub mod Window_Info {
     pub const HEIGHT: u32 = 900;
     pub const WIDTH: u32 = 900;
+}
+
+lazy_static::lazy_static! {
+    pub static ref PATH_TO_PROJECT: String = {
+        // Retrieve the project path at runtime and store it as a static variable.
+        format!("{}/", std::env::current_dir().unwrap().to_string_lossy().to_string())
+    };
 }

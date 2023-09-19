@@ -6,6 +6,8 @@ use std::{
     os::raw::c_char,
 };
 
+use crate::constant::PATH_TO_PROJECT;
+
 pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
     let raw_string = unsafe {
         let pointer = raw_string_array.as_ptr();
@@ -16,10 +18,14 @@ pub fn vk_to_string(raw_string_array: &[c_char]) -> String {
 }
 
 pub fn read_file(file_path: &str) -> Result<Vec<u8>> {
-    let file = File::open(file_path)?;
+    let path = format!("{}{}", PATH_TO_PROJECT.to_string(), file_path);
+
+    let mut file = File::open(file_path)?;
     let file_length = file.metadata()?.len();
-    let buf_reader = BufReader::new(file);
     let mut buffer = Vec::with_capacity(file_length as usize);
-    buf_reader.buffer().read_to_end(&mut buffer)?;
+    file.read_to_end(&mut buffer)?;
+
+    println!("bytes: {}", buffer.len());
+    println!("Constant: {}", path);
     Ok(buffer)
 }

@@ -17,8 +17,10 @@ use winit::{
 };
 
 use vulky::{
+    buffer::{create_command_buffer, create_command_pool, create_frame_buffer},
     constant::{validation, version},
     device::{create_logical_device, pick_physical_device},
+    pipeline::{create_pipeline_layout, create_render_pass},
     platform, utility, SwapChainSupportDetails,
 };
 
@@ -101,6 +103,15 @@ struct VulkanApp {
 
     // Pipeline
     render_pass: vk::RenderPass,
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+
+    //CommandPool
+    command_pool: vk::CommandPool,
+
+    // buffers
+    swap_chain_framebuffer: Vec<vk::Framebuffer>,
+    command_buffer: vk::CommandBuffer,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
@@ -125,6 +136,13 @@ impl VulkanApp {
                 queue_families,
             )?;
 
+        let render_pass = create_render_pass(swapchain_format, &device)?;
+        let (pipeline, pipeline_layout) = create_pipeline_layout(&device, swapchain_extent, render_pass)?;
+        let swap_chain_framebuffer = create_frame_buffer(&device, &swapchain_image_views, render_pass, swapchain_extent)?;
+
+        let command_pool = create_command_pool(&device, physical_device, &instance, &surface_loader, surface)?;
+        let command_buffer = create_command_buffer(&device, command_pool)?;
+        
         Ok(Self {
             instance,
             entry,
@@ -140,6 +158,12 @@ impl VulkanApp {
             swapchain_format,
             swapchain_images,
             swapchain_image_views,
+            swap_chain_framebuffer,
+            render_pass,
+            pipeline_layout,
+            pipeline,
+            command_pool,
+            command_buffer,
             debug_util_loader,
             debug_messenger,
         })
@@ -151,6 +175,17 @@ impl VulkanApp {
             self.debug_util_loader
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
+
+        self.device.destroy_command_pool(self.command_pool, None);
+
+        while self.swap_chain_framebuffer.len() > 0 {
+            let e = self.swap_chain_framebuffer.pop().unwrap();
+            self.device.destroy_framebuffer(e, None);
+        }
+
+        self.device.destroy_pipeline(self.pipeline, None);
+        self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+        self.device.destroy_render_pass(self.render_pass, None);
 
         for _ in 0..self.swapchain_image_views.len() {
             let image_view = self.swapchain_image_views.pop().unwrap();

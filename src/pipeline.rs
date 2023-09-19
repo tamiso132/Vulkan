@@ -5,9 +5,13 @@ use ash::vk::{self, StructureType};
 use crate::utility;
 use anyhow::Result;
 
-unsafe fn create_graphic_pipeline(device: &ash::Device, swapchain_extent: vk::Extent2D) -> Result<vk::PipelineLayout> {
-    let frag_bytes = utility::read_file("shaders/shader.frag")?;
-    let vert_bytes = utility::read_file("shaders/shader.vert")?;
+pub unsafe fn create_pipeline_layout(
+    device: &ash::Device,
+    swapchain_extent: vk::Extent2D,
+    render_pass: vk::RenderPass,
+) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+    let frag_bytes = utility::read_file("shaders/spv/frag.spv")?;
+    let vert_bytes = utility::read_file("shaders/spv/vert.spv")?;
 
     let vert_shader = create_shader_module(device, vert_bytes)?;
     let frag_shader = create_shader_module(device, frag_bytes)?;
@@ -15,15 +19,17 @@ unsafe fn create_graphic_pipeline(device: &ash::Device, swapchain_extent: vk::Ex
     let mut vert_shader_stage = vk::PipelineShaderStageCreateInfo::default();
     let mut frag_shader_stage = vk::PipelineShaderStageCreateInfo::default();
 
+    let entry_point_name = std::ffi::CString::new("main").expect("CString::new failed");
+
     vert_shader_stage.s_type = vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO;
     vert_shader_stage.stage = vk::ShaderStageFlags::VERTEX;
     vert_shader_stage.module = vert_shader;
-    vert_shader_stage.p_name = "main".as_bytes().as_ptr() as *const i8; // MAY NEED TO FIX
+    vert_shader_stage.p_name = entry_point_name.as_ptr() as *const i8; // MAY NEED TO FIX
 
     frag_shader_stage.s_type = vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO;
     frag_shader_stage.stage = vk::ShaderStageFlags::FRAGMENT;
     frag_shader_stage.module = frag_shader;
-    frag_shader_stage.p_name = "main".as_bytes().as_ptr() as *const i8; // MAY NEED TO FIX
+    frag_shader_stage.p_name = entry_point_name.as_ptr() as *const i8; // MAY NEED TO FIX
 
     let shader_stages = vec![vert_shader_stage, frag_shader_stage];
 
@@ -125,24 +131,49 @@ unsafe fn create_graphic_pipeline(device: &ash::Device, swapchain_extent: vk::Ex
 
     let layout = device.create_pipeline_layout(&pipeline_layout_info, None)?;
 
+    let mut info = vk::GraphicsPipelineCreateInfo::default();
+    info.s_type = vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO;
+
+    info.stage_count = 2;
+    info.p_stages = shader_stages.as_ptr();
+    info.p_vertex_input_state = &vertex_input;
+    info.p_viewport_state = &view_state;
+    info.p_rasterization_state = &rasterizer;
+    info.p_multisample_state = &multi_sampling;
+    info.p_depth_stencil_state = std::ptr::null();
+    info.p_color_blend_state = &color_blending;
+    info.p_dynamic_state = &dynamic_state;
+    info.layout = layout;
+    info.render_pass = render_pass;
+    info.subpass = 0;
+    info.base_pipeline_handle = vk::Pipeline::null();
+    info.base_pipeline_index = -1;
+    info.p_input_assembly_state = &input_assembly;
+
+    let pipeline = device
+        .create_graphics_pipelines(vk::PipelineCache::null(), &[info], None)
+        .expect("Error creating the graphic pipeline");
+
     device.destroy_shader_module(vert_shader, None);
     device.destroy_shader_module(frag_shader, None);
 
-    Ok(layout)
+    Ok((pipeline[0], layout))
 }
 
 unsafe fn create_shader_module(device: &ash::Device, bytes: Vec<u8>) -> Result<(vk::ShaderModule)> {
     let mut create_info = vk::ShaderModuleCreateInfo::default();
 
     create_info.s_type = vk::StructureType::SHADER_MODULE_CREATE_INFO;
-    create_info.code_size = bytes.len() / 4;
-    create_info.p_code = bytes.as_slice().as_ptr() as *const u32; // MAY HAVE TO DO SOMETHING HERE
+    create_info.p_next = std::ptr::null();
+    create_info.flags = vk::ShaderModuleCreateFlags::empty();
+    create_info.code_size = bytes.len();
+    create_info.p_code = bytes.as_ptr() as *const u32; // MAY HAVE TO DO SOMETHING HERE
 
     let shader_module = device.create_shader_module(&create_info, None)?;
     Ok(shader_module)
 }
 
-unsafe fn create_render_pass(swapchain_format: vk::Format) {
+pub unsafe fn create_render_pass(swapchain_format: vk::Format, device: &ash::Device) -> Result<vk::RenderPass> {
     let mut color_attachment = vk::AttachmentDescription::default();
 
     color_attachment.format = swapchain_format;
@@ -165,4 +196,16 @@ unsafe fn create_render_pass(swapchain_format: vk::Format) {
     subpass.pipeline_bind_point = vk::PipelineBindPoint::GRAPHICS;
     subpass.color_attachment_count = 1;
     subpass.p_color_attachments = &color_attachment_ref;
+
+    let mut info = vk::RenderPassCreateInfo::default();
+    info.s_type = vk::StructureType::RENDER_PASS_CREATE_INFO;
+
+    info.attachment_count = 1;
+    info.p_attachments = &color_attachment;
+
+    info.subpass_count = 1;
+    info.p_subpasses = &subpass;
+
+    let render_pass = device.create_render_pass(&info, None)?;
+    Ok(render_pass)
 }

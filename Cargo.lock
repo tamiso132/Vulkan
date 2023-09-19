@@ -886,6 +886,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ash",
+ "lazy_static",
  "num",
  "winapi",
  "winit",
