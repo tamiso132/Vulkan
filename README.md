@@ -1,4 +1,3 @@
-# Vulkan för utvecklingsprojektet
 
 Material
 https://doc.rust-lang.org/book  (rust tutorial)

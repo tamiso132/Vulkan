@@ -141,3 +141,28 @@ unsafe fn create_shader_module(device: &ash::Device, bytes: Vec<u8>) -> Result<(
     let shader_module = device.create_shader_module(&create_info, None)?;
     Ok(shader_module)
 }
+
+unsafe fn create_render_pass(swapchain_format: vk::Format) {
+    let mut color_attachment = vk::AttachmentDescription::default();
+
+    color_attachment.format = swapchain_format;
+    color_attachment.samples = vk::SampleCountFlags::TYPE_1;
+
+    color_attachment.load_op = vk::AttachmentLoadOp::CLEAR;
+    color_attachment.store_op = vk::AttachmentStoreOp::STORE;
+
+    color_attachment.stencil_load_op = vk::AttachmentLoadOp::DONT_CARE;
+    color_attachment.stencil_store_op = vk::AttachmentStoreOp::DONT_CARE;
+
+    color_attachment.initial_layout = vk::ImageLayout::UNDEFINED;
+    color_attachment.final_layout = vk::ImageLayout::PRESENT_SRC_KHR;
+
+    let mut color_attachment_ref = vk::AttachmentReference::default();
+    color_attachment_ref.attachment = 0;
+    color_attachment_ref.layout = vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL;
+
+    let mut subpass = vk::SubpassDescription::default();
+    subpass.pipeline_bind_point = vk::PipelineBindPoint::GRAPHICS;
+    subpass.color_attachment_count = 1;
+    subpass.p_color_attachments = &color_attachment_ref;
+}

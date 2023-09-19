@@ -98,6 +98,9 @@ struct VulkanApp {
     swapchain_extent: vk::Extent2D,
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
+
+    // Pipeline
+    render_pass: vk::RenderPass,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
