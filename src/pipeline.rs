@@ -197,6 +197,14 @@ pub unsafe fn create_render_pass(swapchain_format: vk::Format, device: &ash::Dev
     subpass.color_attachment_count = 1;
     subpass.p_color_attachments = &color_attachment_ref;
 
+    let mut dependency = vk::SubpassDependency::default();
+    dependency.src_subpass = vk::SUBPASS_EXTERNAL;
+    dependency.dst_subpass = 0;
+    dependency.src_stage_mask = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
+    dependency.src_access_mask = vk::AccessFlags::empty();
+    dependency.dst_stage_mask = vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
+    dependency.dst_access_mask = vk::AccessFlags::COLOR_ATTACHMENT_WRITE;
+
     let mut info = vk::RenderPassCreateInfo::default();
     info.s_type = vk::StructureType::RENDER_PASS_CREATE_INFO;
 
@@ -205,6 +213,9 @@ pub unsafe fn create_render_pass(swapchain_format: vk::Format, device: &ash::Dev
 
     info.subpass_count = 1;
     info.p_subpasses = &subpass;
+
+    info.dependency_count = 1;
+    info.p_dependencies = [dependency].as_ptr();
 
     let render_pass = device.create_render_pass(&info, None)?;
     Ok(render_pass)

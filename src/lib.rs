@@ -1,5 +1,5 @@
 use anyhow::{Error, Result};
-use ash::vk;
+use ash::{prelude::VkResult, vk};
 
 pub mod buffer;
 pub mod constant;
@@ -27,7 +27,7 @@ impl QueueFamilyIndices {
         instance: &ash::Instance,
         surface_loader: &ash::extensions::khr::Surface,
         surface: &vk::SurfaceKHR,
-    ) -> Result<QueueFamilyIndices> {
+    ) -> VkResult<QueueFamilyIndices> {
         let queue_count = instance.get_physical_device_queue_family_properties2_len(physical_device);
 
         let mut queue_family_ret = QueueFamilyIndices {
@@ -54,7 +54,7 @@ impl QueueFamilyIndices {
                 return Ok(queue_family_ret);
             }
         }
-        return Err(Error::msg("no compatible queue family found"));
+        return Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED);
     }
 }
 
@@ -77,7 +77,7 @@ impl SwapChainSupportDetails {
         surface_loader: &ash::extensions::khr::Surface,
         surface: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
-    ) -> Result<SwapChainSupportDetails> {
+    ) -> VkResult<SwapChainSupportDetails> {
         let capabilities = surface_loader.get_physical_device_surface_capabilities(physical_device, surface)?;
         let formats = surface_loader.get_physical_device_surface_formats(physical_device, surface)?;
         let present_modes = surface_loader.get_physical_device_surface_present_modes(physical_device, surface)?;
@@ -125,11 +125,11 @@ impl SwapChainSupportDetails {
         }
     }
 
-    pub unsafe fn create_image_views(
+    unsafe fn create_image_views(
         swapchain_images: &Vec<vk::Image>,
         swapchain_format: vk::Format,
         device: &ash::Device,
-    ) -> Result<Vec<vk::ImageView>> {
+    ) -> Result<Vec<vk::ImageView>, vk::Result> {
         let mut image_views = vec![];
         for image in swapchain_images {
             let mut image_view_info = vk::ImageViewCreateInfo::default();
@@ -161,15 +161,17 @@ impl SwapChainSupportDetails {
         surface_loader: &ash::extensions::khr::Surface,
         surface: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
-        indices: QueueFamilyIndices,
-    ) -> Result<(
-        ash::extensions::khr::Swapchain,
-        vk::SwapchainKHR,
-        vk::Extent2D,
-        vk::Format,
-        Vec<vk::Image>,
-        Vec<vk::ImageView>,
-    )> {
+    ) -> Result<
+        (
+            ash::extensions::khr::Swapchain,
+            vk::SwapchainKHR,
+            vk::Extent2D,
+            vk::Format,
+            Vec<vk::Image>,
+            Vec<vk::ImageView>,
+        ),
+        vk::Result,
+    > {
         let swap_chain_support = SwapChainSupportDetails::query_swapchain_support(surface_loader, surface, physical_device)?;
 
         let extent = SwapChainSupportDetails::choose_extent(swap_chain_support.capabilities);
@@ -184,6 +186,8 @@ impl SwapChainSupportDetails {
             image_count = swap_chain_support.capabilities.max_image_count;
         }
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default();
+
+        let family_queue = QueueFamilyIndices::find_queue_family(physical_device, instance, surface_loader, &surface)?;
 
         swapchain_info.s_type = vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR;
         swapchain_info.surface = surface;
@@ -201,11 +205,11 @@ impl SwapChainSupportDetails {
         // VK_SHARING_MODE_EXCLUSIVE: An image is owned by one queue family at a time and ownership must be explicitly transferred before using it in another queue family. This option offers the best performance.
         // VK_SHARING_MODE_CONCURRENT: Images can be used across multiple queue families without explicit ownership transfers.
 
-        if indices.graphics_family.unwrap() != indices.present_family.unwrap() {
+        if family_queue.graphics_family.unwrap() != family_queue.present_family.unwrap() {
             swapchain_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
             swapchain_info.queue_family_index_count = 2;
             swapchain_info.p_queue_family_indices =
-                [indices.graphics_family.unwrap(), indices.present_family.unwrap()].as_ptr();
+                [family_queue.graphics_family.unwrap(), family_queue.present_family.unwrap()].as_ptr();
         } else {
             swapchain_info.image_sharing_mode = vk::SharingMode::EXCLUSIVE;
             swapchain_info.queue_family_index_count = 0;

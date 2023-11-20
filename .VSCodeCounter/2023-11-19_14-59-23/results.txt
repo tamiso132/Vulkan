@@ -1,0 +1,39 @@
+Date : 2023-11-19 14:59:23
+Directory : /home/tom/projects/rust/Vulkan
+Total : 11 files,  963 codes, 67 comments, 209 blanks, all 1239 lines
+
+Languages
++--------------+------------+------------+------------+------------+------------+
+| language     | files      | code       | comment    | blank      | total      |
++--------------+------------+------------+------------+------------+------------+
+| Rust         |          9 |        958 |         67 |        207 |      1,232 |
+| Markdown     |          1 |          3 |          0 |          2 |          5 |
+| Shell Script |          1 |          2 |          0 |          0 |          2 |
++--------------+------------+------------+------------+------------+------------+
+
+Directories
++------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                           | files      | code       | comment    | blank      | total      |
++------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                              |         11 |        963 |         67 |        209 |      1,239 |
+| . (Files)                                      |          2 |          5 |          0 |          2 |          7 |
+| src                                            |          9 |        958 |         67 |        207 |      1,232 |
++------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++------------------------------------------------+--------------+------------+------------+------------+------------+
+| filename                                       | language     | code       | comment    | blank      | total      |
++------------------------------------------------+--------------+------------+------------+------------+------------+
+| /home/tom/projects/rust/Vulkan/README.md       | Markdown     |          3 |          0 |          2 |          5 |
+| /home/tom/projects/rust/Vulkan/compile.sh      | Shell Script |          2 |          0 |          0 |          2 |
+| /home/tom/projects/rust/Vulkan/src/buffer.rs   | Rust         |         74 |          0 |         19 |         93 |
+| /home/tom/projects/rust/Vulkan/src/constant.rs | Rust         |         26 |          1 |          7 |         34 |
+| /home/tom/projects/rust/Vulkan/src/device.rs   | Rust         |        120 |         12 |         30 |        162 |
+| /home/tom/projects/rust/Vulkan/src/lib.rs      | Rust         |        189 |         13 |         30 |        232 |
+| /home/tom/projects/rust/Vulkan/src/main.rs     | Rust         |        288 |         33 |         54 |        375 |
+| /home/tom/projects/rust/Vulkan/src/pipeline.rs | Rust         |        163 |          3 |         47 |        213 |
+| /home/tom/projects/rust/Vulkan/src/platform.rs | Rust         |         66 |          2 |          9 |         77 |
+| /home/tom/projects/rust/Vulkan/src/types.rs    | Rust         |          7 |          3 |          4 |         14 |
+| /home/tom/projects/rust/Vulkan/src/utility.rs  | Rust         |         25 |          0 |          7 |         32 |
+| Total                                          |              |        963 |         67 |        209 |      1,239 |
++------------------------------------------------+--------------+------------+------------+------------+------------+

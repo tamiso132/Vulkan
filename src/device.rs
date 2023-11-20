@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 
 use anyhow::Error;
 use anyhow::Result;
+use ash::prelude::VkResult;
 use ash::{vk, Instance};
 
 use crate::constant;
@@ -15,7 +16,7 @@ unsafe fn is_device_suitable(
     instance: &ash::Instance,
     surface_loader: &ash::extensions::khr::Surface,
     surface: &vk::SurfaceKHR,
-) -> Result<QueueFamilyIndices> {
+) -> VkResult<QueueFamilyIndices> {
     let mut device_properties = vk::PhysicalDeviceProperties2::default();
     let mut device_features = vk::PhysicalDeviceFeatures2::default();
 
@@ -59,7 +60,7 @@ unsafe fn is_device_suitable(
     // None
 }
 
-unsafe fn device_extension_support(instance: &Instance, physical_device: vk::PhysicalDevice) -> Result<bool> {
+unsafe fn device_extension_support(instance: &Instance, physical_device: vk::PhysicalDevice) -> VkResult<bool> {
     let extensions = instance.enumerate_device_extension_properties(physical_device)?;
 
     //write out all extensions
@@ -74,14 +75,14 @@ unsafe fn device_extension_support(instance: &Instance, physical_device: vk::Phy
     for extension in extensions {
         let s = utility::vk_to_string(&extension.extension_name);
         for (index, extension_required) in vec_names.clone().iter().enumerate() {
-            if s == extension_required.to_str()? {
+            if s == extension_required.to_str().unwrap() {
                 vec_names.remove(index);
                 break;
             }
         }
     }
     if vec_names.len() > 0 {
-        return Err(Error::msg("missing extension support on this device"));
+        return Err(vk::Result::ERROR_EXTENSION_NOT_PRESENT);
     }
 
     Ok(true)
