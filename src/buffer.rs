@@ -1,3 +1,5 @@
+use std::ptr;
+
 use anyhow::Result;
 use ash::{prelude::VkResult, vk};
 
@@ -63,6 +65,7 @@ pub unsafe fn record_command_buffer(
 
     let mut render_pass_info = vk::RenderPassBeginInfo::default();
     render_pass_info.s_type = vk::StructureType::RENDER_PASS_BEGIN_INFO;
+    render_pass_info.p_next = ptr::null();
     render_pass_info.render_pass = render_pass;
     render_pass_info.framebuffer = swap_chain_framebuffer[image_index as usize];
     render_pass_info.render_area.offset = vk::Offset2D::builder().x(0).y(0).build();
@@ -70,10 +73,14 @@ pub unsafe fn record_command_buffer(
     render_pass_info.clear_value_count = 1;
     render_pass_info.p_clear_values = &clear_color;
 
+    println!("{:?}", render_pass_info);
     // Begin the render pass
     device.cmd_begin_render_pass(command_buffer, &render_pass_info, vk::SubpassContents::INLINE);
 
+    println!("buta56");
     device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+
+    println!("buta");
 
     let mut viewport = vk::Viewport::default();
     viewport.x = 0.0;
@@ -107,12 +114,11 @@ pub unsafe fn create_command_pool(
     surface: vk::SurfaceKHR,
 ) -> Result<vk::CommandPool> {
     let queue_family = QueueFamilyIndices::find_queue_family(physical_device, instance, surface_loader, &surface)?;
-
     let mut pool_info = vk::CommandPoolCreateInfo::default();
     pool_info.s_type = vk::StructureType::COMMAND_POOL_CREATE_INFO;
     pool_info.flags = vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER;
-    pool_info.queue_family_index = queue_family.graphics_family.unwrap();
 
+    pool_info.queue_family_index = queue_family.graphics_family.unwrap();
     let command_pool = device.create_command_pool(&pool_info, None)?;
     Ok(command_pool)
 }

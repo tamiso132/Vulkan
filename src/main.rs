@@ -73,7 +73,9 @@ fn main() {
                     //app.draw_frame();
                     if !quit {
                         match app.draw_frame() {
-                            Ok(x) => {}
+                            Ok(x) => {
+                                println!("something");
+                            }
                             Err(e) => {
                                 panic!("recreates");
                             }
@@ -92,10 +94,6 @@ fn main() {
                 }
                 Event::WindowEvent { window_id, event } => match event {
                     WindowEvent::Resized(x) => {
-                        app.framebuffer_resized = true;
-                        resize = true;
-                        println!("resized");
-
                         if x.width == 0 && x.height == 0 {
                             app.minimized = true;
                         } else {
@@ -193,7 +191,7 @@ impl VulkanApp {
         let command_buffers = create_command_buffers(&device, command_pool)?;
 
         let (in_flights, image_availables, render_finisheds) = create_sync_objects(&device)?;
-
+        println!("yepi");
         Ok(Self {
             instance,
             entry,
@@ -241,21 +239,19 @@ impl VulkanApp {
         ) {
             Ok(i) => i.0,
             Err(e) => {
-                if e == vk::Result::ERROR_OUT_OF_DATE_KHR
-                    || vk::Result::SUBOPTIMAL_KHR == e
-                    || self.framebuffer_resized
-                    || !self.minimized
-                {
-                    self.framebuffer_resized = false;
+                if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
                     self.recreate_swapchain()?;
                 }
                 return Ok(());
             }
         };
 
+        println!("stage1");
+
         self.device.reset_fences(&[self.in_flights[self.current_frame]])?;
         self.device
             .reset_command_buffer(self.command_buffers[self.current_frame], vk::CommandBufferResetFlags::empty())?;
+        println!("helloyy");
         record_command_buffer(
             &self.device,
             self.command_buffers[self.current_frame],
@@ -265,6 +261,7 @@ impl VulkanApp {
             self.swapchain_extent,
             self.pipeline,
         )?;
+        println!("record done");
 
         let signal_semaphore = [self.render_finisheds[self.current_frame]];
 
@@ -277,7 +274,7 @@ impl VulkanApp {
         submit_info.p_command_buffers = &self.command_buffers[self.current_frame];
         submit_info.signal_semaphore_count = signal_semaphore.len() as u32;
         submit_info.p_signal_semaphores = &self.render_finisheds[self.current_frame];
-
+        println!("stage 4");
         let mut present_info = vk::PresentInfoKHR::default();
         present_info.wait_semaphore_count = 1;
         present_info.p_wait_semaphores = &self.render_finisheds[self.current_frame];
@@ -287,15 +284,12 @@ impl VulkanApp {
         self.device
             .queue_submit(self.graphics_queue, &[submit_info], self.in_flights[self.current_frame])?;
 
+        println!("stage2");
+
         match self.swapchain_loader.queue_present(self.present_queue, &present_info) {
             Ok(_) => {}
             Err(e) => {
-                if e == vk::Result::ERROR_OUT_OF_DATE_KHR
-                    || vk::Result::SUBOPTIMAL_KHR == e
-                    || self.framebuffer_resized
-                    || !self.minimized
-                {
-                    self.framebuffer_resized = false;
+                if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
                     self.recreate_swapchain()?;
                 }
                 return Ok(());
@@ -462,7 +456,6 @@ fn setup_debug_utils(
     instance: &ash::Instance,
 ) -> Result<(ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT)> {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
-
     if !validation::ENABLED {
         return Ok((debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null()));
     } else {
