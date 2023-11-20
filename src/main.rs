@@ -245,6 +245,7 @@ impl VulkanApp {
             self.swapchain_extent,
             self.pipeline,
         )?;
+        println!("record done");
 
         let signal_semaphore = [self.render_finisheds];
 
@@ -265,6 +266,8 @@ impl VulkanApp {
         present_info.p_image_indices = &image_index;
         self.device
             .queue_submit(self.graphics_queue, &[submit_info], self.in_flights)?;
+
+        println!("stage2");
 
         match self.swapchain_loader.queue_present(self.present_queue, &present_info) {
             Ok(_) => {}

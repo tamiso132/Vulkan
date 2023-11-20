@@ -88,6 +88,7 @@ pub unsafe fn record_command_buffer(
         p_clear_values: clear_values.as_ptr(),
     };
 
+    println!("{:?}", render_pass_info);
     // Begin the render pass
     println!("image index: {}", image_index);
     println!("{:?}", swap_chain_framebuffer[image_index as usize]);
@@ -98,6 +99,8 @@ pub unsafe fn record_command_buffer(
 
     println!("buta");
     device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+
+    println!("buta");
 
     let mut viewport = vk::Viewport::default();
     viewport.x = 0.0;
