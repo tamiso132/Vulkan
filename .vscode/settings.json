@@ -1,0 +1,24 @@
+{
+    "editor.semanticTokenColorCustomizations": {
+        "[Default Dark+]": {
+            "enabled": true,
+            "rules": {
+                "parameter.mutable": {
+                    "bold": true,
+                    "underline": false
+                },
+                "selfKeyword.mutable": {
+                    "bold": true,
+                    "underline": false
+                },
+                "variable.mutable": {
+                    "bold": true,
+                    "underline": false
+                }
+            }
+        }
+    },
+    "files.associations": {
+        "stdexcept": "cpp"
+    }
+}

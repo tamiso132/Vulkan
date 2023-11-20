@@ -1,4 +1,4 @@
-use anyhow::{Error, Result};
+use anyhow::{Result};
 use ash::{prelude::VkResult, vk};
 
 pub mod buffer;
@@ -177,7 +177,6 @@ impl SwapChainSupportDetails {
         let extent = SwapChainSupportDetails::choose_extent(swap_chain_support.capabilities);
         let surface_format = SwapChainSupportDetails::choose_format(swap_chain_support.formats);
         let present_mode = SwapChainSupportDetails::choose_present_mode(swap_chain_support.present_modes);
-
         let mut image_count = swap_chain_support.capabilities.min_image_count + 1;
 
         if swap_chain_support.capabilities.max_image_count > 0
@@ -186,7 +185,6 @@ impl SwapChainSupportDetails {
             image_count = swap_chain_support.capabilities.max_image_count;
         }
         let mut swapchain_info = vk::SwapchainCreateInfoKHR::default();
-
         let family_queue = QueueFamilyIndices::find_queue_family(physical_device, instance, surface_loader, &surface)?;
 
         swapchain_info.s_type = vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR;
@@ -215,14 +213,11 @@ impl SwapChainSupportDetails {
             swapchain_info.queue_family_index_count = 0;
             swapchain_info.p_queue_family_indices = std::ptr::null();
         }
-
         let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
         let swapchain = swapchain_loader.create_swapchain(&swapchain_info, None)?;
-
         let swapchain_images = swapchain_loader.get_swapchain_images(swapchain)?;
         let swapchain_image_views =
             SwapChainSupportDetails::create_image_views(&swapchain_images, surface_format.format, device)?;
-
         Ok((
             swapchain_loader,
             swapchain,

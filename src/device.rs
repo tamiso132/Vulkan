@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::os::raw::c_char;
+use std::ptr;
 
 use anyhow::Error;
 use anyhow::Result;
@@ -9,6 +10,7 @@ use ash::{vk, Instance};
 
 use crate::constant;
 use crate::SwapChainSupportDetails;
+
 use crate::{constant::support, utility, QueueFamilyIndices};
 
 unsafe fn is_device_suitable(
@@ -140,13 +142,18 @@ pub unsafe fn create_logical_device(
     }
     let extension_names_raw: Vec<*const c_char> = extension_names.iter().map(|raw_name| raw_name.as_ptr()).collect();
 
-    let mut device_info = vk::DeviceCreateInfo::default();
-    device_info.s_type = vk::StructureType::DEVICE_CREATE_INFO;
-    device_info.p_queue_create_infos = queues_infos.as_ptr();
-    device_info.queue_create_info_count = queues_infos.len() as u32;
-    device_info.p_enabled_features = &feature_info;
-    device_info.enabled_extension_count = constant::support::EXTENSION_SUPPORT_ARRAY_NAME.len() as u32;
-    device_info.pp_enabled_extension_names = extension_names_raw.as_ptr();
+    let mut device_info = vk::DeviceCreateInfo {
+        s_type: vk::StructureType::DEVICE_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::DeviceCreateFlags::empty(),
+        queue_create_info_count: queues_infos.len() as u32,
+        p_queue_create_infos: queues_infos.as_ptr(),
+        enabled_layer_count: 0,
+        pp_enabled_layer_names: ptr::null(),
+        enabled_extension_count: extension_names_raw.len() as u32,
+        pp_enabled_extension_names: extension_names_raw.as_ptr(),
+        p_enabled_features: &feature_info,
+    };
 
     let device = instance.create_device(*physical_device, &device_info, None)?;
     Ok(device)

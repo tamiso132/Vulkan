@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::{
     ffi::CStr,
-    fs::{self, File},
-    io::{BufReader, Read},
+    fs::{File},
+    io::{Read},
     os::raw::c_char,
 };
 

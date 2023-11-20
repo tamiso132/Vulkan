@@ -1,23 +1,19 @@
 #![feature(try_blocks)]
-use anyhow::{Error, Result};
+use anyhow::Result;
 use ash::{
-    extensions::{self, khr},
     prelude::VkResult,
-    vk::{
-        self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateInfoEXT,
-        Framebuffer,
-    },
+    vk::{self, DebugUtilsMessageSeverityFlagsEXT, DebugUtilsMessageTypeFlagsEXT, DebugUtilsMessengerCreateInfoEXT},
     Entry, Instance,
 };
-use std::ptr::{self, null};
+use std::ptr::{self};
 use std::{
     ffi::{c_void, CStr, CString},
     os::raw::c_char,
 };
 use winit::{
-    event::{ElementState, Event, MouseButton, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{self, Window, WindowBuilder},
+    event::{Event, WindowEvent},
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
 };
 
 use vulky::{
@@ -46,7 +42,7 @@ fn main() {
             Err(e) => panic!("{e}"),
         };
         let mut quit = false;
-        let mut resize = false;
+        let _resize = false;
         event_loop.run(move |event, _, control_flow| {
             // ControlFlow::Poll continuously runs the event loop, even if the OS hasn't
             // dispatched any events. This is ideal for games and similar applications.
@@ -73,8 +69,8 @@ fn main() {
                     //app.draw_frame();
                     if !quit {
                         match app.draw_frame() {
-                            Ok(x) => {}
-                            Err(e) => {
+                            Ok(_x) => {}
+                            Err(_e) => {
                                 panic!("recreates");
                             }
                         }
@@ -90,12 +86,8 @@ fn main() {
                     // this event rather than in MainEventsCleared, since rendering in here allows
                     // the program to gracefully handle redraws requested by the OS.
                 }
-                Event::WindowEvent { window_id, event } => match event {
+                Event::WindowEvent { window_id: _, event } => match event {
                     WindowEvent::Resized(x) => {
-                        app.framebuffer_resized = true;
-                        resize = true;
-                        println!("resized");
-
                         if x.width == 0 && x.height == 0 {
                             app.minimized = true;
                         } else {
@@ -158,14 +150,14 @@ struct VulkanApp {
 
     // buffers
     swapchain_framebuffers: Vec<vk::Framebuffer>,
-    command_buffers: Vec<vk::CommandBuffer>,
+    command_buffers: vk::CommandBuffer,
 
     // semaphore
-    image_availables: Vec<vk::Semaphore>,
-    render_finisheds: Vec<vk::Semaphore>,
-    in_flights: Vec<vk::Fence>,
+    image_availables: vk::Semaphore,
+    render_finisheds: vk::Semaphore,
+    in_flights: vk::Fence,
 
-    current_frame: usize,
+    //current_frame: usize,
     framebuffer_resized: bool,
     minimized: bool,
 }
@@ -173,27 +165,21 @@ impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
         let entry = ash::Entry::load()?;
         let instance = create_instance(&entry)?;
-        let (debug_util_loader, debug_messenger) = setup_debug_utils(&entry, &instance)?;
-
         let (surface, surface_loader) = create_surface(&entry, &instance, window)?;
-
+        let (debug_util_loader, debug_messenger) = setup_debug_utils(&entry, &instance)?;
         let (physical_device, queue_families) = pick_physical_device(&instance, &surface_loader, &surface)?;
         let device = create_logical_device(&physical_device, &instance, &queue_families)?;
         let graphics_queue = device.get_device_queue(queue_families.graphics_family.unwrap(), 0);
         let present_queue = device.get_device_queue(queue_families.present_family.unwrap(), 0);
-
         let (swapchain_loader, swapchain, swapchain_extent, swapchain_format, swapchain_images, swapchain_image_views) =
             SwapChainSupportDetails::create_swapchain(&instance, &device, &surface_loader, surface, physical_device)?;
-
         let render_pass = create_render_pass(swapchain_format, &device)?;
         let swapchain_framebuffers = create_frame_buffer(&device, &swapchain_image_views, render_pass, swapchain_extent)?;
         let (pipeline, pipeline_layout) = create_pipeline_layout(&device, swapchain_extent, render_pass)?;
-
         let command_pool = create_command_pool(&device, physical_device, &instance, &surface_loader, surface)?;
         let command_buffers = create_command_buffers(&device, command_pool)?;
-
         let (in_flights, image_availables, render_finisheds) = create_sync_objects(&device)?;
-
+        println!("completed");
         Ok(Self {
             instance,
             entry,
@@ -220,7 +206,7 @@ impl VulkanApp {
             in_flights,
             image_availables,
             render_finisheds,
-            current_frame: 0,
+            //current_frame: 0,
             framebuffer_resized: false,
             minimized: false,
         })
@@ -230,35 +216,29 @@ impl VulkanApp {
         // a render pass, is a sequence of rendering operations, organized as series of subpasses
         // each subpass describes, image, rendering commands
 
-        self.device
-            .wait_for_fences(&[self.in_flights[self.current_frame]], true, u64::MAX)?;
-
+        self.device.wait_for_fences(&[self.in_flights], true, u64::MAX)?;
         let image_index: u32 = match self.swapchain_loader.acquire_next_image(
             self.swapchain,
             u64::MAX - 1,
-            self.image_availables[self.current_frame],
+            self.image_availables,
             vk::Fence::null(),
         ) {
             Ok(i) => i.0,
             Err(e) => {
-                if e == vk::Result::ERROR_OUT_OF_DATE_KHR
-                    || vk::Result::SUBOPTIMAL_KHR == e
-                    || self.framebuffer_resized
-                    || !self.minimized
-                {
-                    self.framebuffer_resized = false;
-                    self.recreate_swapchain()?;
+                if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
+                    //self.recreate_swapchain()?;
                 }
                 return Ok(());
             }
         };
 
-        self.device.reset_fences(&[self.in_flights[self.current_frame]])?;
+        self.device.reset_fences(&[self.in_flights])?;
         self.device
-            .reset_command_buffer(self.command_buffers[self.current_frame], vk::CommandBufferResetFlags::empty())?;
+            .reset_command_buffer(self.command_buffers, vk::CommandBufferResetFlags::empty())?;
+
         record_command_buffer(
             &self.device,
-            self.command_buffers[self.current_frame],
+            self.command_buffers,
             self.render_pass,
             &self.swapchain_framebuffers,
             image_index,
@@ -266,43 +246,37 @@ impl VulkanApp {
             self.pipeline,
         )?;
 
-        let signal_semaphore = [self.render_finisheds[self.current_frame]];
+        let signal_semaphore = [self.render_finisheds];
 
         let mut submit_info = vk::SubmitInfo::default();
         submit_info.s_type = vk::StructureType::SUBMIT_INFO;
         submit_info.wait_semaphore_count = 1;
-        submit_info.p_wait_semaphores = &self.image_availables[self.current_frame];
+        submit_info.p_wait_semaphores = &self.image_availables;
         submit_info.p_wait_dst_stage_mask = &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
         submit_info.command_buffer_count = 1;
-        submit_info.p_command_buffers = &self.command_buffers[self.current_frame];
+        submit_info.p_command_buffers = &self.command_buffers;
         submit_info.signal_semaphore_count = signal_semaphore.len() as u32;
-        submit_info.p_signal_semaphores = &self.render_finisheds[self.current_frame];
-
+        submit_info.p_signal_semaphores = &self.render_finisheds;
         let mut present_info = vk::PresentInfoKHR::default();
         present_info.wait_semaphore_count = 1;
-        present_info.p_wait_semaphores = &self.render_finisheds[self.current_frame];
+        present_info.p_wait_semaphores = &self.render_finisheds;
         present_info.p_swapchains = &self.swapchain;
         present_info.swapchain_count = 1;
         present_info.p_image_indices = &image_index;
         self.device
-            .queue_submit(self.graphics_queue, &[submit_info], self.in_flights[self.current_frame])?;
+            .queue_submit(self.graphics_queue, &[submit_info], self.in_flights)?;
 
         match self.swapchain_loader.queue_present(self.present_queue, &present_info) {
             Ok(_) => {}
             Err(e) => {
-                if e == vk::Result::ERROR_OUT_OF_DATE_KHR
-                    || vk::Result::SUBOPTIMAL_KHR == e
-                    || self.framebuffer_resized
-                    || !self.minimized
-                {
-                    self.framebuffer_resized = false;
-                    self.recreate_swapchain()?;
+                if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
+                    // self.recreate_swapchain()?;
                 }
                 return Ok(());
             }
         };
 
-        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as usize;
+        //self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as usize;
         Ok(())
     }
 
@@ -311,11 +285,11 @@ impl VulkanApp {
             self.debug_util_loader
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
-        for i in 0..MAX_FRAMES_IN_FLIGHT as usize {
-            self.device.destroy_fence(self.in_flights[i], None);
-            self.device.destroy_semaphore(self.image_availables[i], None);
-            self.device.destroy_semaphore(self.render_finisheds[i], None);
-        }
+        // for i in 0..MAX_FRAMES_IN_FLIGHT as usize {
+        self.device.destroy_fence(self.in_flights, None);
+        self.device.destroy_semaphore(self.image_availables, None);
+        self.device.destroy_semaphore(self.render_finisheds, None);
+        // }
         self.device.destroy_command_pool(self.command_pool, None);
 
         self.clean_swapchain();
@@ -420,6 +394,10 @@ unsafe fn create_instance(entry: &ash::Entry) -> Result<ash::Instance> {
 
         instance_info.pp_enabled_layer_names = layers_names_raw.as_ptr();
         instance_info.enabled_layer_count = layers_names_raw.len() as u32;
+    } else {
+        instance_info.p_next = std::ptr::null();
+        instance_info.pp_enabled_layer_names = std::ptr::null();
+        instance_info.enabled_layer_count = 0;
     }
 
     let instance = entry.create_instance(&instance_info, None)?;
@@ -462,11 +440,12 @@ fn setup_debug_utils(
     instance: &ash::Instance,
 ) -> Result<(ash::extensions::ext::DebugUtils, vk::DebugUtilsMessengerEXT)> {
     let debug_utils_loader = ash::extensions::ext::DebugUtils::new(entry, instance);
-
     if !validation::ENABLED {
-        return Ok((debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null()));
+        Ok((debug_utils_loader, ash::vk::DebugUtilsMessengerEXT::null()))
     } else {
         let messenger_ci = debug_create_info()?;
+
+        println!("debug enabled setup");
 
         let utils_messenger = unsafe {
             debug_utils_loader

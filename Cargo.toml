@@ -12,3 +12,6 @@ anyhow = { version = "1.0.75" }
 winapi = "0.3.9"
 num = "0.2"
 lazy_static = "1.4"
+
+[profile.release]
+opt-level = 2  # You can try lower values like 1 or 0
