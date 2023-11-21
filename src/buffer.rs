@@ -44,10 +44,7 @@ pub unsafe fn create_frame_buffer(
 pub unsafe fn create_command_buffers(
     device: &ash::Device,
     command_pool: vk::CommandPool,
-    graphics_pipeline: vk::Pipeline,
     frame_buffer: &Vec<vk::Framebuffer>,
-    render_pass: vk::RenderPass,
-    surface_extent: vk::Extent2D,
 ) -> Result<Vec<vk::CommandBuffer>> {
     let alloc_info = vk::CommandBufferAllocateInfo {
         s_type: StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
@@ -98,14 +95,11 @@ pub unsafe fn record_command_buffer(
         p_clear_values: clear_values.as_ptr(),
     };
 
-    println!("{:?}", render_pass_info);
     // Begin the render pass
 
     device.cmd_begin_render_pass(command_buffer, &render_pass_info, vk::SubpassContents::INLINE);
 
     device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-
-    println!("buta");
 
     let mut viewport = vk::Viewport::default();
     viewport.x = 0.0;
@@ -141,22 +135,22 @@ pub unsafe fn create_command_pool(device: &ash::Device, queue_family: &QueueFami
     Ok(device.create_command_pool(&pool_info, None)?)
 }
 
-pub unsafe fn create_sync_objects(device: &ash::Device) -> Result<(vk::Fence, vk::Semaphore, vk::Semaphore)> {
+pub unsafe fn create_sync_objects(device: &ash::Device) -> Result<(Vec<vk::Fence>, Vec<vk::Semaphore>, Vec<vk::Semaphore>)> {
     let semphore_info = vk::SemaphoreCreateInfo::default();
     let mut fence_info = vk::FenceCreateInfo::default();
     fence_info.flags = vk::FenceCreateFlags::SIGNALED; // created at true
 
-    // let mut fences = vec![];
-    // let mut semphores = vec![];
-    // let mut semphores2 = vec![];
-    // for _ in 0..MAX_FRAMES_IN_FLIGHT {
-    let fence = device.create_fence(&fence_info, None)?;
-    let semphore = device.create_semaphore(&semphore_info, None)?;
-    let semphore2 = device.create_semaphore(&semphore_info, None)?;
+    let mut fences = vec![];
+    let mut semphores = vec![];
+    let mut semphores2 = vec![];
+    for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        let fence = device.create_fence(&fence_info, None)?;
+        let semphore = device.create_semaphore(&semphore_info, None)?;
+        let semphore2 = device.create_semaphore(&semphore_info, None)?;
 
-    //     fences.push(fence);
-    //     semphores.push(semphore);
-    //     semphores2.push(semphore2);
-    // }
-    Ok((fence, semphore, semphore2))
+        fences.push(fence);
+        semphores.push(semphore);
+        semphores2.push(semphore2);
+    }
+    Ok((fences, semphores, semphores2))
 }

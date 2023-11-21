@@ -67,6 +67,10 @@ fn main() {
                     // applications which do not always need to. Applications that redraw continuously
                     // can just render here instead.
                     //app.draw_frame();
+
+                    window.request_redraw();
+                }
+                Event::RedrawRequested(_) => {
                     if !quit {
                         match app.draw_frame() {
                             Ok(_x) => {}
@@ -75,11 +79,6 @@ fn main() {
                             }
                         }
                     }
-
-                    window.request_redraw();
-                }
-                Event::RedrawRequested(_) => {
-
                     // Redraw the application.
                     //
                     // It's preferable for applications that do not render continuously to render in
@@ -153,9 +152,9 @@ struct VulkanApp {
     command_buffers: Vec<vk::CommandBuffer>,
 
     // semaphore
-    image_availables: vk::Semaphore,
-    render_finisheds: vk::Semaphore,
-    in_flights: vk::Fence,
+    image_availables: Vec<vk::Semaphore>,
+    render_finisheds: Vec<vk::Semaphore>,
+    in_flights: Vec<vk::Fence>,
 
     current_frame: usize,
     framebuffer_resized: bool,
@@ -180,14 +179,7 @@ impl VulkanApp {
         let swapchain_framebuffers = create_frame_buffer(&device, &swapchain_image_views, render_pass, swapchain_extent)?;
         let (pipeline, pipeline_layout) = create_pipeline_layout(&device, swapchain_extent, render_pass)?;
         let command_pool = create_command_pool(&device, &queue_family)?;
-        let command_buffers = create_command_buffers(
-            &device,
-            command_pool,
-            pipeline,
-            &swapchain_framebuffers,
-            render_pass,
-            swapchain_extent,
-        )?;
+        let command_buffers = create_command_buffers(&device, command_pool, &swapchain_framebuffers)?;
         let (in_flights, image_availables, render_finisheds) = create_sync_objects(&device)?;
         Ok(Self {
             instance,
@@ -225,11 +217,12 @@ impl VulkanApp {
         // a render pass, is a sequence of rendering operations, organized as series of subpasses
         // each subpass describes, image, rendering commands
 
-        self.device.wait_for_fences(&[self.in_flights], true, u64::MAX)?;
+        self.device
+            .wait_for_fences(&[self.in_flights[self.current_frame]], true, u64::MAX)?;
         let image_index: u32 = match self.swapchain_loader.acquire_next_image(
             self.swapchain,
             u64::MAX - 1,
-            self.image_availables,
+            self.image_availables[self.current_frame],
             vk::Fence::null(),
         ) {
             Ok(i) => i.0,
@@ -241,7 +234,7 @@ impl VulkanApp {
             }
         };
 
-        self.device.reset_fences(&[self.in_flights])?;
+        self.device.reset_fences(&[self.in_flights[self.current_frame]])?;
         self.device
             .reset_command_buffer(self.command_buffers[0], vk::CommandBufferResetFlags::empty())?;
 
@@ -254,29 +247,26 @@ impl VulkanApp {
             self.swapchain_extent,
             self.pipeline,
         )?;
-        println!("record done");
 
-        let signal_semaphore = [self.render_finisheds];
+        let signal_semaphore = [self.render_finisheds[self.current_frame]];
 
         let mut submit_info = vk::SubmitInfo::default();
         submit_info.s_type = vk::StructureType::SUBMIT_INFO;
         submit_info.wait_semaphore_count = 1;
-        submit_info.p_wait_semaphores = &self.image_availables;
+        submit_info.p_wait_semaphores = &self.image_availables[self.current_frame];
         submit_info.p_wait_dst_stage_mask = &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
         submit_info.command_buffer_count = 1;
         submit_info.p_command_buffers = self.command_buffers.as_ptr();
         submit_info.signal_semaphore_count = signal_semaphore.len() as u32;
-        submit_info.p_signal_semaphores = &self.render_finisheds;
+        submit_info.p_signal_semaphores = &self.render_finisheds[self.current_frame];
         let mut present_info = vk::PresentInfoKHR::default();
         present_info.wait_semaphore_count = 1;
-        present_info.p_wait_semaphores = &self.render_finisheds;
+        present_info.p_wait_semaphores = &self.render_finisheds[self.current_frame];
         present_info.p_swapchains = &self.swapchain;
         present_info.swapchain_count = 1;
         present_info.p_image_indices = &image_index;
         self.device
-            .queue_submit(self.graphics_queue, &[submit_info], self.in_flights)?;
-
-        println!("stage2");
+            .queue_submit(self.graphics_queue, &[submit_info], self.in_flights[self.current_frame])?;
 
         match self.swapchain_loader.queue_present(self.present_queue, &present_info) {
             Ok(_) => {}
@@ -298,9 +288,9 @@ impl VulkanApp {
                 .destroy_debug_utils_messenger(self.debug_messenger, None);
         }
         // for i in 0..MAX_FRAMES_IN_FLIGHT as usize {
-        self.device.destroy_fence(self.in_flights, None);
-        self.device.destroy_semaphore(self.image_availables, None);
-        self.device.destroy_semaphore(self.render_finisheds, None);
+        self.device.destroy_fence(self.in_flights[self.current_frame], None);
+        self.device.destroy_semaphore(self.image_availables[self.current_frame], None);
+        self.device.destroy_semaphore(self.render_finisheds[self.current_frame], None);
         // }
         self.device.destroy_command_pool(self.command_pool, None);
 
