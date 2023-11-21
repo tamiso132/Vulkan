@@ -1,7 +1,10 @@
 use std::ptr;
 
 use anyhow::Result;
-use ash::{prelude::VkResult, vk};
+use ash::{
+    prelude::VkResult,
+    vk::{self, StructureType},
+};
 
 use crate::QueueFamilyIndices;
 
@@ -14,15 +17,15 @@ pub unsafe fn create_frame_buffer(
     swapchain_extent: vk::Extent2D,
 ) -> VkResult<Vec<vk::Framebuffer>> {
     let mut frame_buffer = vec![];
-    println!("{:?}", render_pass);
     for index in 0..swapchain_image_views.len() {
+        let attachments = [swapchain_image_views[index]];
         let mut info = vk::FramebufferCreateInfo {
             s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::FramebufferCreateFlags::empty(),
             render_pass,
             attachment_count: 1,
-            p_attachments: [swapchain_image_views[index]].as_ptr(),
+            p_attachments: attachments.as_ptr(),
             width: swapchain_extent.width,
             height: swapchain_extent.height,
             layers: 1,
@@ -38,17 +41,24 @@ pub unsafe fn create_frame_buffer(
     Ok(frame_buffer)
 }
 
-pub unsafe fn create_command_buffers(device: &ash::Device, command_pool: vk::CommandPool) -> Result<vk::CommandBuffer> {
-    let mut alloc_info = vk::CommandBufferAllocateInfo::default();
-
-    alloc_info.s_type = vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.command_pool = command_pool;
-    alloc_info.level = vk::CommandBufferLevel::PRIMARY;
-    alloc_info.command_buffer_count = 1 as u32;
-
+pub unsafe fn create_command_buffers(
+    device: &ash::Device,
+    command_pool: vk::CommandPool,
+    graphics_pipeline: vk::Pipeline,
+    frame_buffer: &Vec<vk::Framebuffer>,
+    render_pass: vk::RenderPass,
+    surface_extent: vk::Extent2D,
+) -> Result<Vec<vk::CommandBuffer>> {
+    let alloc_info = vk::CommandBufferAllocateInfo {
+        s_type: StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
+        p_next: ptr::null(),
+        command_pool,
+        level: vk::CommandBufferLevel::PRIMARY,
+        command_buffer_count: frame_buffer.len() as u32,
+    };
     let command_buffer = device.allocate_command_buffers(&alloc_info)?;
 
-    Ok(command_buffer[0])
+    Ok(command_buffer)
 }
 
 pub unsafe fn record_command_buffer(
@@ -90,14 +100,9 @@ pub unsafe fn record_command_buffer(
 
     println!("{:?}", render_pass_info);
     // Begin the render pass
-    println!("image index: {}", image_index);
-    println!("{:?}", swap_chain_framebuffer[image_index as usize]);
-    println!("{:?}", render_pass_info);
 
-    println!("buta56");
     device.cmd_begin_render_pass(command_buffer, &render_pass_info, vk::SubpassContents::INLINE);
 
-    println!("buta");
     device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
 
     println!("buta");
@@ -125,21 +130,15 @@ pub unsafe fn record_command_buffer(
     Ok(())
 }
 
-pub unsafe fn create_command_pool(
-    device: &ash::Device,
-    physical_device: vk::PhysicalDevice,
-    instance: &ash::Instance,
-    surface_loader: &ash::extensions::khr::Surface,
-    surface: vk::SurfaceKHR,
-) -> Result<vk::CommandPool> {
-    let queue_family = QueueFamilyIndices::find_queue_family(physical_device, instance, surface_loader, &surface)?;
-    let mut pool_info = vk::CommandPoolCreateInfo::default();
-    pool_info.s_type = vk::StructureType::COMMAND_POOL_CREATE_INFO;
-    pool_info.flags = vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER;
+pub unsafe fn create_command_pool(device: &ash::Device, queue_family: &QueueFamilyIndices) -> Result<vk::CommandPool> {
+    let pool_info = vk::CommandPoolCreateInfo {
+        s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+        queue_family_index: queue_family.graphics_family.unwrap(),
+    };
 
-    pool_info.queue_family_index = queue_family.graphics_family.unwrap();
-    let command_pool = device.create_command_pool(&pool_info, None)?;
-    Ok(command_pool)
+    Ok(device.create_command_pool(&pool_info, None)?)
 }
 
 pub unsafe fn create_sync_objects(device: &ash::Device) -> Result<(vk::Fence, vk::Semaphore, vk::Semaphore)> {

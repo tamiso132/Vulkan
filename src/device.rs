@@ -94,13 +94,13 @@ pub unsafe fn pick_physical_device(
     instance: &ash::Instance,
     surface_loader: &ash::extensions::khr::Surface,
     surface: &vk::SurfaceKHR,
-) -> Result<(vk::PhysicalDevice, QueueFamilyIndices)> {
+) -> Result<(vk::PhysicalDevice)> {
     let devices = instance.enumerate_physical_devices()?;
     for device in devices {
         let dev_ret = is_device_suitable(device, instance, surface_loader, surface);
 
         match dev_ret {
-            Ok(x) => return Ok((device, x)),
+            Ok(x) => return Ok(device),
             Err(e) => eprintln!("Error: {}", e),
         }
     }
@@ -108,19 +108,20 @@ pub unsafe fn pick_physical_device(
 }
 
 pub unsafe fn create_logical_device(
-    physical_device: &vk::PhysicalDevice,
+    physical_device: vk::PhysicalDevice,
     instance: &ash::Instance,
-    queue_indices: &QueueFamilyIndices,
-) -> Result<ash::Device> {
+    surface: vk::SurfaceKHR,
+    surface_loader: &ash::extensions::khr::Surface,
+) -> Result<(ash::Device, QueueFamilyIndices)> {
     let queue_priorities = [1.0];
-
+    let indices = QueueFamilyIndices::find_queue_family(physical_device, instance, &surface_loader, &surface)?;
     // Create the queue info with the correct queue priorities
     let mut queues_infos = vec![];
 
     let mut unique_queue = HashSet::new();
 
-    unique_queue.insert(queue_indices.graphics_family);
-    unique_queue.insert(queue_indices.present_family);
+    unique_queue.insert(indices.graphics_family);
+    unique_queue.insert(indices.present_family);
 
     for queue_index in unique_queue.iter() {
         let queue_info = vk::DeviceQueueCreateInfo {
@@ -155,8 +156,8 @@ pub unsafe fn create_logical_device(
         p_enabled_features: &feature_info,
     };
 
-    let device = instance.create_device(*physical_device, &device_info, None)?;
-    Ok(device)
+    let device = instance.create_device(physical_device, &device_info, None)?;
+    Ok((device, indices))
 }
 
 pub fn get_version_api(api: u32) -> (u32, u32, u32, u32) {

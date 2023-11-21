@@ -1,4 +1,4 @@
-use anyhow::{Result};
+use anyhow::Result;
 use ash::{prelude::VkResult, vk};
 
 pub mod buffer;
@@ -28,7 +28,7 @@ impl QueueFamilyIndices {
         surface_loader: &ash::extensions::khr::Surface,
         surface: &vk::SurfaceKHR,
     ) -> VkResult<QueueFamilyIndices> {
-        let queue_count = instance.get_physical_device_queue_family_properties2_len(physical_device);
+        let queue_count = instance.get_physical_device_queue_family_properties(physical_device).len();
 
         let mut queue_family_ret = QueueFamilyIndices {
             graphics_family: None,

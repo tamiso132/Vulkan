@@ -150,14 +150,14 @@ struct VulkanApp {
 
     // buffers
     swapchain_framebuffers: Vec<vk::Framebuffer>,
-    command_buffers: vk::CommandBuffer,
+    command_buffers: Vec<vk::CommandBuffer>,
 
     // semaphore
     image_availables: vk::Semaphore,
     render_finisheds: vk::Semaphore,
     in_flights: vk::Fence,
 
-    //current_frame: usize,
+    current_frame: usize,
     framebuffer_resized: bool,
     minimized: bool,
 }
@@ -165,21 +165,30 @@ impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
         let entry = ash::Entry::load()?;
         let instance = create_instance(&entry)?;
+
         let (surface, surface_loader) = create_surface(&entry, &instance, window)?;
         let (debug_util_loader, debug_messenger) = setup_debug_utils(&entry, &instance)?;
-        let (physical_device, queue_families) = pick_physical_device(&instance, &surface_loader, &surface)?;
-        let device = create_logical_device(&physical_device, &instance, &queue_families)?;
-        let graphics_queue = device.get_device_queue(queue_families.graphics_family.unwrap(), 0);
-        let present_queue = device.get_device_queue(queue_families.present_family.unwrap(), 0);
+
+        let physical_device = pick_physical_device(&instance, &surface_loader, &surface)?;
+        let (device, queue_family) = create_logical_device(physical_device, &instance, surface, &surface_loader)?;
+        let graphics_queue = device.get_device_queue(queue_family.graphics_family.unwrap(), 0);
+        let present_queue = device.get_device_queue(queue_family.present_family.unwrap(), 0);
         let (swapchain_loader, swapchain, swapchain_extent, swapchain_format, swapchain_images, swapchain_image_views) =
             SwapChainSupportDetails::create_swapchain(&instance, &device, &surface_loader, surface, physical_device)?;
+
         let render_pass = create_render_pass(swapchain_format, &device)?;
         let swapchain_framebuffers = create_frame_buffer(&device, &swapchain_image_views, render_pass, swapchain_extent)?;
         let (pipeline, pipeline_layout) = create_pipeline_layout(&device, swapchain_extent, render_pass)?;
-        let command_pool = create_command_pool(&device, physical_device, &instance, &surface_loader, surface)?;
-        let command_buffers = create_command_buffers(&device, command_pool)?;
+        let command_pool = create_command_pool(&device, &queue_family)?;
+        let command_buffers = create_command_buffers(
+            &device,
+            command_pool,
+            pipeline,
+            &swapchain_framebuffers,
+            render_pass,
+            swapchain_extent,
+        )?;
         let (in_flights, image_availables, render_finisheds) = create_sync_objects(&device)?;
-        println!("completed");
         Ok(Self {
             instance,
             entry,
@@ -206,7 +215,7 @@ impl VulkanApp {
             in_flights,
             image_availables,
             render_finisheds,
-            //current_frame: 0,
+            current_frame: 0,
             framebuffer_resized: false,
             minimized: false,
         })
@@ -226,7 +235,7 @@ impl VulkanApp {
             Ok(i) => i.0,
             Err(e) => {
                 if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
-                    //self.recreate_swapchain()?;
+                    self.recreate_swapchain()?;
                 }
                 return Ok(());
             }
@@ -234,11 +243,11 @@ impl VulkanApp {
 
         self.device.reset_fences(&[self.in_flights])?;
         self.device
-            .reset_command_buffer(self.command_buffers, vk::CommandBufferResetFlags::empty())?;
+            .reset_command_buffer(self.command_buffers[0], vk::CommandBufferResetFlags::empty())?;
 
         record_command_buffer(
             &self.device,
-            self.command_buffers,
+            self.command_buffers[0],
             self.render_pass,
             &self.swapchain_framebuffers,
             image_index,
@@ -255,7 +264,7 @@ impl VulkanApp {
         submit_info.p_wait_semaphores = &self.image_availables;
         submit_info.p_wait_dst_stage_mask = &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT;
         submit_info.command_buffer_count = 1;
-        submit_info.p_command_buffers = &self.command_buffers;
+        submit_info.p_command_buffers = self.command_buffers.as_ptr();
         submit_info.signal_semaphore_count = signal_semaphore.len() as u32;
         submit_info.p_signal_semaphores = &self.render_finisheds;
         let mut present_info = vk::PresentInfoKHR::default();
@@ -273,13 +282,13 @@ impl VulkanApp {
             Ok(_) => {}
             Err(e) => {
                 if e == vk::Result::ERROR_OUT_OF_DATE_KHR || vk::Result::SUBOPTIMAL_KHR == e {
-                    // self.recreate_swapchain()?;
+                    self.recreate_swapchain()?;
                 }
                 return Ok(());
             }
         };
 
-        //self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as usize;
+        self.current_frame = (self.current_frame + 1) % MAX_FRAMES_IN_FLIGHT as usize;
         Ok(())
     }
 
@@ -357,6 +366,7 @@ unsafe fn create_instance(entry: &ash::Entry) -> Result<ash::Instance> {
     if validation::ENABLED && !check_validation_support(&entry)? {
         panic!("Validation layer is requested, but no available");
     }
+    let debug_utils_create_info = debug_create_info()?;
 
     let app_info = vk::ApplicationInfo::builder()
         .engine_name(&engine_name)
@@ -380,28 +390,25 @@ unsafe fn create_instance(entry: &ash::Entry) -> Result<ash::Instance> {
         vk::InstanceCreateFlags::empty()
     };
 
-    let mut instance_info = vk::InstanceCreateInfo {
+    let instance_info = vk::InstanceCreateInfo {
         s_type: vk::StructureType::INSTANCE_CREATE_INFO,
-        p_next: ptr::null(),
+        p_next: if validation::ENABLED {
+            &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void
+        } else {
+            ptr::null()
+        },
         flags,
         p_application_info: &app_info,
-        pp_enabled_layer_names: ptr::null(),
-        enabled_layer_count: 0,
+        pp_enabled_layer_names: if validation::ENABLED {
+            println!("validation enabled");
+            layers_names_raw.as_ptr()
+        } else {
+            ptr::null()
+        },
+        enabled_layer_count: if validation::ENABLED { 1 } else { 0 },
         enabled_extension_count: extension.len() as u32,
         pp_enabled_extension_names: extension.as_ptr(),
     };
-
-    if validation::ENABLED {
-        let debug_utils_create_info = debug_create_info()?;
-        instance_info.p_next = &debug_utils_create_info as *const vk::DebugUtilsMessengerCreateInfoEXT as *const c_void;
-
-        instance_info.pp_enabled_layer_names = layers_names_raw.as_ptr();
-        instance_info.enabled_layer_count = layers_names_raw.len() as u32;
-    } else {
-        instance_info.p_next = std::ptr::null();
-        instance_info.pp_enabled_layer_names = std::ptr::null();
-        instance_info.enabled_layer_count = 0;
-    }
 
     let instance = entry.create_instance(&instance_info, None)?;
     Ok(instance)

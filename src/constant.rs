@@ -1,5 +1,3 @@
-
-
 pub mod version {
     use ash::vk;
 
