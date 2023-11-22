@@ -1,8 +1,8 @@
-use std::{ptr};
+use std::ptr;
 
 use ash::vk::{self, StructureType};
 
-use crate::utility;
+use crate::{constant::Vertex, utility};
 use anyhow::Result;
 
 pub unsafe fn create_pipeline_layout(
@@ -16,42 +16,49 @@ pub unsafe fn create_pipeline_layout(
     let vert_shader = create_shader_module(device, vert_bytes)?;
     let frag_shader = create_shader_module(device, frag_bytes)?;
 
-    let mut vert_shader_stage = vk::PipelineShaderStageCreateInfo::default();
-    let mut frag_shader_stage = vk::PipelineShaderStageCreateInfo::default();
-
     let entry_point_name = std::ffi::CString::new("main").expect("CString::new failed");
 
-    vert_shader_stage.s_type = vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vert_shader_stage.stage = vk::ShaderStageFlags::VERTEX;
-    vert_shader_stage.module = vert_shader;
-    vert_shader_stage.p_name = entry_point_name.as_ptr() as *const i8; // MAY NEED TO FIX
+    let mut shader_stages = [
+        vk::PipelineShaderStageCreateInfo {
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            stage: vk::ShaderStageFlags::VERTEX,
+            module: vert_shader,
+            p_name: entry_point_name.as_ptr(),
+            p_specialization_info: ptr::null(),
+        },
+        vk::PipelineShaderStageCreateInfo {
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            stage: vk::ShaderStageFlags::FRAGMENT,
+            module: frag_shader,
+            p_name: entry_point_name.as_ptr(),
+            p_specialization_info: ptr::null(),
+        },
+    ];
 
-    frag_shader_stage.s_type = vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_shader_stage.stage = vk::ShaderStageFlags::FRAGMENT;
-    frag_shader_stage.module = frag_shader;
-    frag_shader_stage.p_name = entry_point_name.as_ptr() as *const i8; // MAY NEED TO FIX
+    let binding_description = Vertex::get_binding_description();
+    let attribute_description = Vertex::get_input_attribute_description();
 
-    let shader_stages = vec![vert_shader_stage, frag_shader_stage];
+    let vertex_input = vk::PipelineVertexInputStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::PipelineVertexInputStateCreateFlags::empty(),
+        vertex_binding_description_count: 1,
+        p_vertex_binding_descriptions: &binding_description,
+        vertex_attribute_description_count: attribute_description.len() as u32,
+        p_vertex_attribute_descriptions: attribute_description.as_ptr(),
+    };
 
-    let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-    let mut dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
-
-    dynamic_state.s_type = vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamic_state_count = states.len() as u32;
-    dynamic_state.p_dynamic_states = states.as_ptr();
-
-    let mut vertex_input = vk::PipelineVertexInputStateCreateInfo::default();
-
-    vertex_input.s_type = vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertex_input.vertex_binding_description_count = 0;
-    vertex_input.vertex_attribute_description_count = 0;
-    vertex_input.p_vertex_attribute_descriptions = std::ptr::null();
-    vertex_input.p_vertex_binding_descriptions = std::ptr::null();
-
-    let mut input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default();
-    input_assembly.s_type = StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly.topology = vk::PrimitiveTopology::TRIANGLE_LIST;
-    input_assembly.primitive_restart_enable = vk::FALSE;
+    let vertex_assembly_info = vk::PipelineInputAssemblyStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
+        topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+        primitive_restart_enable: vk::FALSE,
+    };
 
     let mut view_port = vk::Viewport::default();
     view_port.x = 0.0;
@@ -65,12 +72,27 @@ pub unsafe fn create_pipeline_layout(
     scissor.offset = vk::Offset2D { x: 0, y: 0 };
     scissor.extent = swapchain_extent;
 
-    let mut view_state = vk::PipelineViewportStateCreateInfo::default();
-    view_state.s_type = vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    view_state.viewport_count = 1;
-    view_state.scissor_count = 1;
-    view_state.p_viewports = &view_port;
-    view_state.p_scissors = &scissor;
+    let mut view_state = vk::PipelineViewportStateCreateInfo {
+        s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        p_next: ptr::null(),
+        flags: vk::PipelineViewportStateCreateFlags::empty(),
+        viewport_count: 1,
+        p_viewports: &view_port,
+        scissor_count: 1,
+        p_scissors: &scissor,
+    };
+
+    let states = vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+    let mut dynamic_state = vk::PipelineDynamicStateCreateInfo::default();
+
+    dynamic_state.s_type = vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamic_state_count = states.len() as u32;
+    dynamic_state.p_dynamic_states = states.as_ptr();
+
+    let mut input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default();
+    input_assembly.s_type = StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = vk::PrimitiveTopology::TRIANGLE_LIST;
+    input_assembly.primitive_restart_enable = vk::FALSE;
 
     let mut rasterizer = vk::PipelineRasterizationStateCreateInfo::default();
     rasterizer.s_type = vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO;

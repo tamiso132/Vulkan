@@ -122,6 +122,7 @@ pub unsafe fn create_logical_device(
 
     unique_queue.insert(indices.graphics_family);
     unique_queue.insert(indices.present_family);
+    unique_queue.insert(indices.transfer_family);
 
     for queue_index in unique_queue.iter() {
         let queue_info = vk::DeviceQueueCreateInfo {

@@ -1,5 +1,9 @@
+#![feature(offset_of)]
 use anyhow::Result;
-use ash::{prelude::VkResult, vk};
+use ash::{
+    prelude::VkResult,
+    vk::{self, QueueFlags},
+};
 
 pub mod buffer;
 pub mod constant;
@@ -11,11 +15,12 @@ pub mod utility;
 pub struct QueueFamilyIndices {
     pub graphics_family: Option<u32>,
     pub present_family: Option<u32>,
+    pub transfer_family: Option<u32>,
 }
 
 impl QueueFamilyIndices {
     pub fn is_completed(&self) -> bool {
-        self.graphics_family.is_some() && self.present_family.is_some()
+        self.graphics_family.is_some() && self.present_family.is_some() && self.transfer_family.is_some()
     }
     // GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING
     // TRANSFER | SPARSE_BINDING
@@ -33,6 +38,7 @@ impl QueueFamilyIndices {
         let mut queue_family_ret = QueueFamilyIndices {
             graphics_family: None,
             present_family: None,
+            transfer_family: None,
         };
 
         let mut queue_families = vec![ash::vk::QueueFamilyProperties2::default(); queue_count];
@@ -48,6 +54,12 @@ impl QueueFamilyIndices {
 
             if queue.queue_family_properties.queue_count > 0 && present_support {
                 queue_family_ret.present_family = Some(index as u32);
+            }
+
+            if queue.queue_family_properties.queue_flags & (QueueFlags::TRANSFER | QueueFlags::GRAPHICS)
+                == QueueFlags::TRANSFER
+            {
+                queue_family_ret.transfer_family = Some(index as u32);
             }
 
             if queue_family_ret.is_completed() {
