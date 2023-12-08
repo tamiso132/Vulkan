@@ -144,7 +144,7 @@ pub unsafe fn create_logical_device(
     }
     let extension_names_raw: Vec<*const c_char> = extension_names.iter().map(|raw_name| raw_name.as_ptr()).collect();
 
-    let mut device_info = vk::DeviceCreateInfo {
+    let device_info = vk::DeviceCreateInfo {
         s_type: vk::StructureType::DEVICE_CREATE_INFO,
         p_next: ptr::null(),
         flags: vk::DeviceCreateFlags::empty(),

@@ -214,17 +214,20 @@ impl SwapChainSupportDetails {
         swapchain_info.old_swapchain = vk::SwapchainKHR::null();
         // VK_SHARING_MODE_EXCLUSIVE: An image is owned by one queue family at a time and ownership must be explicitly transferred before using it in another queue family. This option offers the best performance.
         // VK_SHARING_MODE_CONCURRENT: Images can be used across multiple queue families without explicit ownership transfers.
+        swapchain_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
 
+        let mut queues_indices = vec![];
+
+        queues_indices.push(family_queue.graphics_family.unwrap());
         if family_queue.graphics_family.unwrap() != family_queue.present_family.unwrap() {
-            swapchain_info.image_sharing_mode = vk::SharingMode::CONCURRENT;
-            swapchain_info.queue_family_index_count = 2;
-            swapchain_info.p_queue_family_indices =
-                [family_queue.graphics_family.unwrap(), family_queue.present_family.unwrap()].as_ptr();
-        } else {
-            swapchain_info.image_sharing_mode = vk::SharingMode::EXCLUSIVE;
-            swapchain_info.queue_family_index_count = 0;
-            swapchain_info.p_queue_family_indices = std::ptr::null();
+            queues_indices.push(family_queue.present_family.unwrap());
         }
+
+        queues_indices.push(family_queue.transfer_family.unwrap());
+
+        swapchain_info.queue_family_index_count = queues_indices.len() as u32;
+        swapchain_info.p_queue_family_indices = queues_indices.as_ptr();
+
         let swapchain_loader = ash::extensions::khr::Swapchain::new(instance, device);
         let swapchain = swapchain_loader.create_swapchain(&swapchain_info, None)?;
         let swapchain_images = swapchain_loader.get_swapchain_images(swapchain)?;

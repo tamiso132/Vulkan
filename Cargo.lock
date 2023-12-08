@@ -867,6 +867,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "stb_image"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfdaa89eb7dd3362e4abb16c4a8acf04786755882b38ff00714f2f1de0f4fcd3"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "strict-num"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -995,6 +1005,7 @@ dependencies = [
  "lazy_static",
  "nalgebra",
  "num",
+ "stb_image",
  "winapi",
  "winit",
 ]

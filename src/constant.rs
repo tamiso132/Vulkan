@@ -38,6 +38,9 @@ lazy_static::lazy_static! {
 }
 
 #[repr(C)]
+pub struct Index(u16);
+
+#[repr(C)]
 pub struct Vertex {
     pos: glm::Vector2<f32>,
     color: glm::Vector3<f32>,
@@ -70,9 +73,13 @@ impl Vertex {
     }
 }
 
-pub const VERTICES: [Vertex; 3] = [
+pub const VERTICES: [Vertex; 4] = [
     Vertex {
-        pos: glm::Vector2::<f32>::new(0.0, -0.5),
+        pos: glm::Vector2::<f32>::new(-0.5, -0.5),
+        color: glm::Vector3::new(0.0, 0.0, 1.0),
+    },
+    Vertex {
+        pos: glm::Vector2::<f32>::new(0.5, -0.5),
         color: glm::Vector3::new(1.0, 0.0, 0.0),
     },
     Vertex {
@@ -84,3 +91,5 @@ pub const VERTICES: [Vertex; 3] = [
         color: glm::Vector3::new(0.0, 0.0, 1.0),
     },
 ];
+
+pub static INDICES: [Index; 6] = [Index(0), Index(1), Index(2), Index(2), Index(3), Index(0)];

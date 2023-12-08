@@ -18,8 +18,8 @@ use winit::{
 
 use vulky::{
     buffer::{
-        create_command_buffers, create_command_pool, create_frame_buffer, create_sync_objects, create_vertex_buffer,
-        record_command_buffer, MAX_FRAMES_IN_FLIGHT,
+        create_command_buffers, create_command_pool, create_frame_buffer, create_index_buffer, create_sync_objects,
+        create_vertex_buffer, record_command_buffer, MAX_FRAMES_IN_FLIGHT,
     },
     constant::{validation, version},
     device::{create_logical_device, pick_physical_device},
@@ -27,6 +27,7 @@ use vulky::{
     platform, utility, SwapChainSupportDetails,
 };
 
+mod texture;
 mod types;
 
 /// The Vulkan SDK version that started requiring the portability subset extension for macOS.
@@ -132,6 +133,7 @@ struct VulkanApp {
     // Queues
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
+    transfer_queue: vk::Queue,
 
     //Swapchain
     swapchain: vk::SwapchainKHR,
@@ -147,7 +149,8 @@ struct VulkanApp {
     pipeline: vk::Pipeline,
 
     //CommandPool
-    command_pool: vk::CommandPool,
+    graphic_command_pool: vk::CommandPool,
+    transfer_command_pool: vk::CommandPool,
 
     // buffers
     swapchain_framebuffers: Vec<vk::Framebuffer>,
@@ -163,7 +166,10 @@ struct VulkanApp {
     minimized: bool,
 
     vertex_buffer: vk::Buffer,
-    device_memory: vk::DeviceMemory,
+    vertex_memory: vk::DeviceMemory,
+
+    index_buffer: vk::Buffer,
+    index_memory: vk::DeviceMemory,
 }
 impl VulkanApp {
     unsafe fn new(window: &Window) -> Result<Self> {
@@ -177,24 +183,23 @@ impl VulkanApp {
         let (device, queue_family) = create_logical_device(physical_device, &instance, surface, &surface_loader)?;
         let graphics_queue = device.get_device_queue(queue_family.graphics_family.unwrap(), 0);
         let present_queue = device.get_device_queue(queue_family.present_family.unwrap(), 0);
+        let transfer_queue = device.get_device_queue(queue_family.transfer_family.unwrap(), 0);
+
         let (swapchain_loader, swapchain, swapchain_extent, swapchain_format, swapchain_images, swapchain_image_views) =
             SwapChainSupportDetails::create_swapchain(&instance, &device, &surface_loader, surface, physical_device)?;
 
         let render_pass = create_render_pass(swapchain_format, &device)?;
         let swapchain_framebuffers = create_frame_buffer(&device, &swapchain_image_views, render_pass, swapchain_extent)?;
         let (pipeline, pipeline_layout) = create_pipeline_layout(&device, swapchain_extent, render_pass)?;
-        let command_pool = create_command_pool(&device, &queue_family)?;
-        let (vertex_buffer, device_memory) = create_vertex_buffer(&device, physical_device, &instance)?;
-        let command_buffers = create_command_buffers(
-            &device,
-            command_pool,
-            pipeline,
-            &swapchain_framebuffers,
-            render_pass,
-            swapchain_extent,
-            vertex_buffer,
-            swapchain_extent,
-        )?;
+
+        let graphic_command_pool = create_command_pool(&device, &queue_family.graphics_family)?;
+        let transfer_command_pool = create_command_pool(&device, &queue_family.transfer_family)?;
+        let (vertex_buffer, vertex_memory) =
+            create_vertex_buffer(&device, physical_device, &instance, transfer_command_pool, transfer_queue)?;
+        let (index_buffer, index_memory) =
+            create_index_buffer(&device, &instance, physical_device, transfer_command_pool, transfer_queue)?;
+
+        let command_buffers = create_command_buffers(&device, graphic_command_pool)?;
         let (in_flights, image_availables, render_finisheds) = create_sync_objects(&device)?;
         Ok(Self {
             instance,
@@ -203,6 +208,8 @@ impl VulkanApp {
             device,
             graphics_queue,
             present_queue,
+            transfer_queue,
+            transfer_command_pool,
             surface,
             surface_loader,
             swapchain,
@@ -215,7 +222,7 @@ impl VulkanApp {
             render_pass,
             pipeline_layout,
             pipeline,
-            command_pool,
+            graphic_command_pool,
             command_buffers,
             debug_util_loader,
             debug_messenger,
@@ -226,7 +233,9 @@ impl VulkanApp {
             framebuffer_resized: false,
             minimized: false,
             vertex_buffer,
-            device_memory,
+            vertex_memory,
+            index_buffer,
+            index_memory,
         })
     }
 
@@ -270,6 +279,7 @@ impl VulkanApp {
             self.swapchain_extent,
             self.pipeline,
             self.vertex_buffer,
+            self.index_buffer,
         )?;
 
         let wait_semaphores = [self.image_availables[self.current_frame]];
@@ -333,12 +343,15 @@ impl VulkanApp {
             self.device.destroy_semaphore(self.image_availables[i], None);
             self.device.destroy_semaphore(self.render_finisheds[i], None);
         }
-        self.device.destroy_command_pool(self.command_pool, None);
+        self.device.destroy_command_pool(self.graphic_command_pool, None);
+        self.device.destroy_command_pool(self.transfer_command_pool, None);
 
         self.clean_swapchain();
 
         self.device.destroy_buffer(self.vertex_buffer, None);
-        self.device.free_memory(self.device_memory, None);
+        self.device.destroy_buffer(self.index_buffer, None);
+        self.device.free_memory(self.vertex_memory, None);
+        self.device.free_memory(self.index_memory, None);
 
         self.device.destroy_pipeline(self.pipeline, None);
         self.device.destroy_pipeline_layout(self.pipeline_layout, None);
